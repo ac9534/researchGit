@@ -1,0 +1,78 @@
+---
+title: " WDS, HW 0"
+author:
+date: 'Due: 11:00PM,  July 10, 2021'
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    number_sections: yes
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '4'
+urlcolor: blue
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, results = "hide", fig.width=8, fig.height=4)
+options(scipen = 0, digits = 3)  # controls base R output
+# check if you have ISLR package, if not, install it
+if(!require('pacman')) {install.packages('pacman')}
+pacman::p_load(ISLR, readxl, tidyverse, magrittr, dplyr, ggplot2)
+```
+
+
+# Pre-Program Preparation
+
+June 25th to July 10th:
+
+Because of the short period of the program, we are trying to get you prepared earlier.  Do not worry if you have trouble to some of the installations. You may not be able to compile Get_staRted.rmd either. We will help you in Day 1 and Day 2 to make sure everyone is on board!
+
+
+## Read the program syllabus carefully
+
+## Activate [Canvas](https://whartononline.upenn.edu/courses/688) and [Piazza](https://piazza.com/wharton.upenn/summer2021/2021datascience)
+
+* Get familiar with Canvas and Piazza
+* Be able to download course materials from Files on Canvas
+* Read through this syllabus carefully
+* Be able to submit your work to Canvas
+* Ask questions or comments on Piazza
+
+## Install R/RStudio/RMarkdown by following our tutorial and pre-recorded video
+
+* A basic tutorial: **Get_staRted.html**, **Get_staRted.pdf**, and Get_staRted.rmd (the source file of Get_staRted.html).
+  - File location: *Files/Module 0 Get Ready* on Canvas
+  - Instructions on installing R/RStudio/RMarkdown
+  - Some basic R functions
+  
+* Pre-recorded video to go through **Get_staRted.rmd** 
+  - File location: *Files/Video/Basic R tutorial.mp4* on Canvas
+  - A video where our previous TA shows step by step instructions
+  
+# Homework 0 Directions and Submission Requirements
+
+* Part I:
+  * Get familiar with the R/RStudio and RMarkdown
+  * Be able to execute codes in Get_staRted.rmd in RStudio
+  * Go through chunk by chunk to study R-commend. You are not required to memorize most of them at all. Rather, try to understand what each chunk does. 
+  * (Optional): study `dplyr`/`ggplot` in **advanced_R_tutorial.Rmd**
+  
+* Part II:
+  * **Due 11pm on July 10**
+  * In the section titled **Your Summary** at the end of Get_staRted.rmd, summarize what you have learned in a short paragraph (no more than 100 words)
+  * Compile the source code Get_staRted.rmd into Get_staRted.html
+  * Turn in your compiled html to Canvas under Homework 0.
+
+
+
+
