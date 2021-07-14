@@ -36,7 +36,7 @@ pacman::p_load(ISLR, readxl, tidyverse, magrittr, dplyr, ggplot2)
 
 # Objectives 
 
-*The main purpose for this homework is to tell the difference between probability and statistics.* Using the Roulette game as illustration, we go through the main elements of probability and statstics. We then learn how to estimate unknown parameters in a population with precision, i.e., a confidence interval. Simulations help us to understand the interpretation of a confidence interval. 
+*The main purpose for this homework is to tell the difference between probability and statistics.* Using the Roulette game as illustration, we go through the main elements of probability and statistics. We then learn how to estimate unknown parameters in a population with precision, i.e., a confidence interval. Simulations help us to understand the interpretation of a confidence interval. 
 
 - Continue to get used to `RStudio` and `RMarkdown`
 - Probability
