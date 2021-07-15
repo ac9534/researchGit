@@ -88,7 +88,7 @@ c. Let's "play" the game using code.
     (iii) Let's play another 100 rounds. Plot the histogram of total payoffs. What is the average payoff from these 100 rounds? Is this as expected? 
 
 
-# Question 2: Statistics MY PART
+# Question 2: Statistics (Alex attempt)
     
 This exercise is designed to help you understand the notion of confidence interval and understand confidence interval through simulations.
 
@@ -96,11 +96,59 @@ Let $Y$ be the average winning amount among 100 games of betting \$1 each time i
 
 a. Generate 50 $Y's$ from $N(\mu = -.0526, \sigma =.1)$ with `set.seed(1)`. Construct a $95\%$ confidence interval for the unknown mean. State the confidence interval. Is the true value -.0526 inside the confidence interval?
 
+```{r Solution A, echo = T}
 
-b. Repeat question 2a. 100 times to generate 100 samples (each has sample size 50 and follows $N(\mu = -.0526, \sigma =.1)$) and produce 100 95\% confidence intervals. How many of the confidence intervals capture the true mean -.0526? Display your 100 confidence intervals in a meaningful way. 
+generateSeededConfidenceInterval <- function(x) #function to generate a confidence interval of Y with 50 trials
+{
+  n <- 50 #trials
+  plays <- 100 #games played per trial
+  set.seed(x) #seeding, more useful in part B
+  win_vector <- rbinom(n, plays, 18/38) #vector of wins for 'n' trials, each trial simulating "100 'plays' games
+  gain_vector <- win_vector * 2 - plays #convert wins to cash won
+  avg_gain <- gain_vector / plays #convert to avg gains
+  
+  x_bar <- mean(avg_gain) #get sample mean of avg winning amt (Y) in above simulated trials
+  s_error <- qnorm(0.975)*(sd(avg_gain)/sqrt(n)) #calculate standard error
+  confint <- c(x_bar - s_error, x_bar + s_error) #confidence interval as vector
+  return(confint)
+}
+
+ci <- generateSeededConfidenceInterval(1) #use previous function to generate first seeded ci, returns [1] -0.0819 -0.0221
+```
+
+##the 95% confidence interval: (-0.0819, -0.0221) successfully captures the true value of -.0526.
+
+b. Repeat question 2a. 100 times to generate 100 samples (each has sample size 50 and follows $N(\mu = -.0526, \sigma =.1)$) and produce 100 95\% confidence intervals. How many of the confidence intervals capture the true mean -.0526? Display your 100 confidence intervals in a meaningful way.
+
+```{r Solution B, include = T, echo = T}
+n_sim <- 100 #number of simulations
+upper_ci <- rep(0, n_sim) #vector filled with 0s of length n_sim storing upper cis
+lower_ci <- rep(0, n_sim) #vector filled with 0s of length n_sim storing lower cis
+
+capture_false <- 0 #counter for number of cis failing to capture true value: -0.0526
+
+for(i in 1:n_sim) #simulate n_sim times
+{
+  lower_ci[i] <- first(generateSeededConfidenceInterval(i)) #set lower_ci at i to the lower confidence interval of the i'th seed
+  upper_ci[i] <- last(generateSeededConfidenceInterval(i))  #set upper_ci at i to the upper confidence interval of the i'th seed
+  if(lower_ci[i] > -0.056 | upper_ci[i] < -0.056) #condition testing if ci captures true value
+  {
+    capture_false <- capture_false + 1 #add one if failed capture
+  }
+}
+
+results <- cbind(lower_ci, upper_ci) #combine to make table of cis
+results_df <- as.data.frame(results) #convert results to dataframe to plot
+
+require(ggplot2)
+ggplot(results_df, aes(x = 1:n_sim, y = (lower_ci + upper_ci)/2)) + geom_point(size = 2) + geom_errorbar(aes(ymax = upper_ci, ymin = lower_ci)) + geom_hline(yintercept = -0.0526) #I'm not good with ggplot, anyone know how to color the cis that failed to capture, reorder results_df by increasing sample means (not necessary, but out of curiousity), and label the axis? Stupid questions, but thx
+
+
+cat("Number of intervals that failed to capture true value: ", capture_false) #print?
+```
 
 c. Summarize the interpretation of a 95\% confidence interval based on the simulation in question 2b.  
-
+**Given a significantly large amount of confidence intervals are constructed, approximately 95% of those intervals will capture the true value.**
 
 # Appendix: simulation code for confidence interval
 

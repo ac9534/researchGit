@@ -357,7 +357,7 @@ div.tocify {
 <div style="page-break-after: always;"></div>
 <div id="objectives" class="section level1">
 <h1>Objectives</h1>
-<p><em>The main purpose for this homework is to tell the difference between probability and statistics.</em> Using the Roulette game as illustration, we go through the main elements of probability and statstics. We then learn how to estimate unknown parameters in a population with precision, i.e., a confidence interval. Simulations help us to understand the interpretation of a confidence interval.</p>
+<p><em>The main purpose for this homework is to tell the difference between probability and statistics.</em> Using the Roulette game as illustration, we go through the main elements of probability and statistics. We then learn how to estimate unknown parameters in a population with precision, i.e., a confidence interval. Simulations help us to understand the interpretation of a confidence interval.</p>
 <ul>
 <li>Continue to get used to <code>RStudio</code> and <code>RMarkdown</code></li>
 <li>Probability
@@ -480,6 +480,9 @@ $(document).ready(function () {
 
 <script>
 $(document).ready(function ()  {
+
+    // temporarily add toc-ignore selector to headers for the consistency with Pandoc
+    $('.unlisted.unnumbered').addClass('toc-ignore')
 
     // move toc-ignore selectors from section div to header
     $('div.section.toc-ignore')
