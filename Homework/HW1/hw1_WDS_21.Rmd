@@ -29,6 +29,7 @@ urlcolor: blue
 
 
 ```{r setup, include=FALSE}
+options(max.print = 10000)
 knitr::opts_chunk$set(echo = TRUE, results = "hide", fig.width=8, fig.height=4)
 options(scipen = 0, digits = 3)  # controls base R output
 # check if you have ISLR package, if not, install it
@@ -79,7 +80,7 @@ Homework in this program is different from your usual homework assignment as a t
 
 
 - Study Module 1: DataPreparationEDA_WDS
-- Be able to comple DataPreparationEDA_WDS.rmd
+- Be able to compile DataPreparationEDA_WDS.rmd
 
 
 
@@ -106,9 +107,43 @@ Select only the variables Age, Gender, Education Level, Household Income in 2013
 
 Change the variable names to be "age", "gender", "education", "income", "sirius", "wharton", "worktime".
 
+```{r readAndChangeNames}
+radioData <- read.csv("data/Survey_results_final.csv")
+radioData <- radioData %>%
+  rename(Age = Answer.Age, Gender = Answer.Gender, Education = Answer.Education, Income = Answer.HouseHoldIncome, Sirius = Answer.Sirius.Radio, Wharton = Answer.Wharton.Radio, Worktime = WorkTimeInSeconds)
+names(radioData)
+```
+
+
+
 ii. Handle missing/wrongly filled values of the selected variables
 
 As in real world data with user input, the data is incomplete, with missing values, and has incorrect responses. There is no general rule for dealing with these problems beyond “use common sense.” In whatever case, explain what the problems were and how you addressed them. Be sure to explain your rationale for your chosen methods of handling issues with the data. Do not use Excel for this, however tempting it might be.
+
+```{r Data Cleaning}
+# Age, Gender, Education, Income, Sirius, Wharton, Worktime
+radioData <- radioData %>% filter(Age != "", Gender != "", Education != "", Income != "", Sirius != "", Wharton != "", Worktime != "")
+
+radioData <- radioData %>% filter(
+  Age != "female",
+  Age != "223",
+  Age != "4",
+  )
+index <- which(radioData$Age == "27`") ##find
+radioData$Age[index] <- "27"##changeTo
+radioData$Age[index]
+
+index2 <- which(radioData$Age == "Eighteen (18)")
+radioData$Age[index2] <- "18"
+
+sort(unique(radioData$Age))
+sort(unique(radioData$Gender))
+sort(unique(radioData$Education))
+sort(unique(radioData$Income))
+sort(unique(radioData$Sirius))
+sort(unique(radioData$Wharton))
+sort(unique(radioData$Worktime))
+```
 
 iii. Brief summary 
 
