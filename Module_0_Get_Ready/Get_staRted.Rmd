@@ -816,6 +816,15 @@ x*y   # element by element multiplication
 sqrt(x) # even "scalar" functions operate on vectors
 ```
 
+```{r concatenate columns}
+column_one <- rep(1:10)
+column_two <- rep(11:20)
+column_df <- data.frame(column_one, column_two)
+column_three <- column_df$column_one - column_df$column_two
+cbind(column_df, column_three)
+```
+
+
 ### Version Control
 
 You should store your files under some form of [version control](https://en.wikipedia.org/wiki/Version_control). Doing so allows you to view your file history and restore your files in case your hard drive dies or you make a mistake.

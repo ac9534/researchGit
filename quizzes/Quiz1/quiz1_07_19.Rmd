@@ -1,0 +1,149 @@
+---
+title: " Quiz 1"
+author: "Your name here!!!!"
+date: 'Due: 4:30pm,  Jul 19, 2021'
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: '4'
+  html_document:
+    code_folding: show
+    highlight: haddock
+    number_sections: yes
+    theme: lumen
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '4'
+urlcolor: blue
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=8, fig.height=4)
+options(scipen = 0, digits = 3)  # controls base R output
+
+if(!require('pacman')) {install.packages('pacman')}
+pacman::p_load(tidyverse,  dplyr, ggplot2)
+```
+
+
+\pagebreak
+
+# Overview
+
+This is a 30 minute, **individual** quiz. It is an open book exercise. Feel free to copy any R-chunks from the lectures or homework. Ask your TF for help if you get stuck somewhere. 
+
+Submit the following two files to the canvas:
+
+* quiz1.rmd
+* quiz1.html or .pdf (Only 1 compiled one)
+* We will keep the submission open until 6:00pm 
+
+**Objectives:**
+
+We will focus on the following aspects:
+
+* Read data into R
+* Make sense out of the data through EDA
+* Be able to use R-Markdown
+* Be able to submit your work to Canvas
+* No need to beautify your R-markdown .html or .pdf 
+* Solutions/R functions might not be unique
+* Data needed for this quiz: `data/car_04_regular_sub.csv`
+
+# Case study: are Asian cars more efficient? 
+
+Asian cars, especially Japanese and Korean cars have been loved by families due to their reputation for fuel efficiency and relatively cheaper prices. We will use a subset of the full data `car_04_regular.csv` called `data/car_04_regular_sub.csv` to perform some preliminary analyses. 
+
+## Question 1: Read the data
+
+Read the data first. To make sure you get the data into R we have included the following R-chuck. Notice this chunk only works if you have stored the data `car_04_regular_sub.csv` in a sub-folder called `data`. 
+```{r read data }
+car_data <- read.csv("data/car_04_regular_sub.csv", header=TRUE)
+```
+
+i. How many variables are in this data? And how many car models are there?
+
+```{r Part i}
+num_variables <- length(names(car_data))
+num_variables
+num_models <- length(unique(car_data$Make.Model))
+num_models
+```
+
+
+ii. The variable `Continent` is a categorical variable for labeling the region a car is made in. How many continents are reported on in this data set?
+
+```{r Part ii}
+num_continents <- length(unique(car_data$Continent))
+num_continents
+```
+
+
+iii. Do you spot anything unusual in this data set?
+```{r Part iii}
+summary(car_data)
+view(car_data)
+```
+After viewing the data table itself and its summary, I was unable to find anything out of the ordinary
+
+
+
+## Question 2: EDA
+
+Fuel efficiency can be measured with `MPG_Hwy` (mileage per gallon on highways). This is the variable we use to measure the fuel efficiency for a car. 
+
+i. What is the sample mean and sample standard deviation of `MPG_Hwy` for all cars?
+
+```{r Part 2i}
+Hwy_eff <- car_data$MPG_Hwy
+sampleSD <- sd(Hwy_eff)
+sampleMean <- mean(Hwy_eff)
+sampleSD
+sampleMean
+```
+
+
+ii. Show the histogram of `MPG_Hwy` for all cars. Does `MPG_Hwy` appear to be a normal variable? Why or why not?
+```{r Part 2ii}
+hist(Hwy_eff, breaks = 18, xlim = range(4:46), xlab = "MPG_City", plot = T)
+```
+The histogram of MPG_Hwy suggests that it follows an approximately normal pattern
+
+
+## Question 3: Comparison
+
+i. What is the sample mean of `MPG_Hwy` for American cars?
+```{r 3i}
+american <- car_data %>% filter(Continent == "Am")
+asian <- car_data %>% filter(Continent == "As")
+American_mean_eff <- mean(american$MPG_Hwy)
+American_mean_eff
+```
+
+ii. What is the sample mean of `MPG_Hwy` for Asian cars? 
+```{r 3ii}
+Asian_mean_eff <- mean(asian$MPG_Hwy)
+Asian_mean_eff
+```
+
+iii. By comparing the two sample means above, do we have some evidence that Asian cars are more efficient than American cars? (A larger value for `MPG_Hwy` indicates a more efficient car.)
+
+Part 3iii: Yes, we have *some* evidence. On highways, asian cars have a mpg of 26.4, compared to the slightly lesser value of 25.5 mpg for american cars. However, this does not paint the entire picture. Hypothesis testing should be done to see the probabilities of us getting this result even if their true means were the same, and other variables should be looked at, such as MPG_City.
+
+iv. Is it fair to only compare the sample means from the two continents? What are some other statistics that would be useful for this analysis?
+
+As alluded to before, we should conduct hypothesis testing and include other variables. To make better conclusions, even looking at something like standard deviation by itself would help, to perhaps help form a conclusion that, while asian cars are on average more efficient, they vary more...etc, etc. (Not the actual conclusion, just making a point). We should also include MPG_City. If we wished to go even further, we should also be comparing cars with a similar purpose. An American truck compared to a small japanese sedan is like comparing apples to oranges. We could categorize cars by horsepower intervals, or even cylinders to help with that. I'm sure there's more that could be done, but those were some of my ideas.
+
+
+**End of the quiz**
+
+# Solution to come
+
+
+
+
