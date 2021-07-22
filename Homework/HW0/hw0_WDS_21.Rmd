@@ -72,6 +72,13 @@ Because of the short period of the program, we are trying to get you prepared ea
   * In the section titled **Your Summary** at the end of Get_staRted.rmd, summarize what you have learned in a short paragraph (no more than 100 words)
   * Compile the source code Get_staRted.rmd into Get_staRted.html
   * Turn in your compiled html to Canvas under Homework 0.
+  
+```{r}
+df <- iris
+df1 <- group_by(df, Species)
+df
+df1
+```
 
 
 
