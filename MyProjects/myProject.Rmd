@@ -25,5 +25,6 @@ if("heart.disease" %in% names(data1)){
 }
 data1_lm <- lm(heartDisease ~ biking + smoking, data = data1)
 summary(data1_lm)
+print("heartDisease = 14.98466 + 0.17833(smoking) - 0.20013(biking)") ##Check: Independent variables must not be correlated with eachother, but must be with the dependent variable
 ```
 
