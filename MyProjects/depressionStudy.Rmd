@@ -1,0 +1,696 @@
+---
+title: "depressionStudy"
+author: "Alexander Chen"
+date: "7/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, cache = T, fig.width=8, fig.height=4,
+                      warning = F)
+options(scipen = 0, digits = 3)  ## controls base R output
+
+## Package setup
+if(!require("pacman")) install.packages("pacman")
+
+pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate,
+               plotROC, usmap, glmnet, plotly, haven, magrittr, Stat2Data, skimr, GGally)
+```
+
+```{r intial load data, eval = T}
+cpes.raw <- read_sav("data/20240-0001-Data.sav")
+```
+
+<h1>Abstract</h1>
+
+```{r data cleaning}
+cpes.cleaned <- cpes.raw %>% rename(
+  "sex" = "V09036",
+  "age" = "V07306",
+  "region" = "V08992",
+  "maritalStatus" = "V08759",
+  "weightClass" = "V08823",
+  "height.inches" = "V06728",
+  "race" = "RANCEST",
+  "householdIncome" = "V08683",
+  "timesMarried" = "V09402",
+  "livingChildren" = "V09409",
+  "yearsOfEducation.respondent" = "V03085",
+  "parents.USBorn" = "V03125",
+  "yearsOfEducation.father" = "V03081",
+  "yearsOfEducation.mother" = "V03084",
+  "employment.initialAge" = "V09390",
+  "employment.current" = "V09154",
+ 
+  #Adult Demographics
+  "homeless.historical" = "V05633",
+  "relativeWellOffRank.usPop" = "V05668",
+  "relativeWellOffRank.local" = "V05669",
+  "religiousAttendance.freq" = "V05629",
+  "motherAlive" = "V05672",
+  "motherDeath.respondentAge" = "V05674",
+  "fatherAlive" = "V05686",
+  "fatherDeath.respondentAge" = "V05689",
+ 
+  #Childhood Demographics
+  "highschool.numAttended" = "V05732",
+  "districtHadMiddleSchool" = "V05733",
+  "gradeSchool.relativeAge" = "V05741",
+  "religiousImportance.childhood" = "V05713",
+  "familyHeadWorkTime.male" = "V05814",
+  "familyHeadWorkTime.female" = "V05820",
+  "neglect.insuffSupervision" = "V05836",
+  "neglect.dangerousChores" = "V05835",
+  "neglect.parentSpendOnSelf" = "V05837",
+  "neglect.hunger" = "V05838",
+  "neglect.insuffMedical" = "V05839",
+  "femaleCaretaker.closeness" = "V05841",
+  "femaleCaretaker.strictRules" = "V05845",
+  "femaleCaretaker.depression" = "V05846",
+  "femaleCaretaker.depression.hospitalized" = "V05850",
+  "femaleCaretaker.anxiety" = "V05852",
+  "femaleCaretaker.employmentDifficulty" = "V05865",
+  "femaleCaretaker.physicalFights" = "V05867",
+  "femaleCaretaker.crime" = "V05868",
+  "femaleCaretaker.suicideAttempt" = "V05871",
+  "maleCaretaker.closeness" = "V05874",
+  "maleCaretaker.strictRules" = "V05878",
+  "maleCaretaker.depression" = "V05879",
+  "maleCaretaker.depression.hospitalized" = "V05883",
+  "maleCaretaker.anxiety" = "V05885",
+  "maleCaretaker.employmentDifficulty" = "V05900",
+  "maleCaretaker.physicalFights" = "V05902",
+  "maleCaretaker.crime" = "V05903",
+  "maleCaretaker.suicideAttempt" = "V05906",
+ 
+  #Temporal
+  "physicalHealth.30day" = "V04445",
+  "healthWorkAbsence.30day" = "V04452",
+  "difficultyConcentrating.30day" = "V04469",
+  "difficultyUnderstandingSituation.30day" = "V04470",
+  "difficutlyRemembering.30day" = "V04471",
+  "daysMobilityDifficult.30day" = "V04474",
+  "socialLifeDifficulty.30day" = "V04483",
+  "daysOvertime.30day" = "V05219",
+  "jobPerformance.30day" = "V05239",
+ 
+  #Discrimination
+  "lessRespect.freq" = "V06539",
+  "nameCalled.freq" = "V06545",
+  "dislikedForRace" = "V06550",
+ 
+  #Employment
+  "wksUnemployed.12month" = "V05162",
+  "workHrs.week" = "V05204",
+ 
+  #Family Burden
+  "closeFamily.alive" = "V06280",
+  "closeRelative.cancer" = "V06282",
+  "closeRelative.seriousHeartProblem" = "V06290",
+  "closeRelative.seriousMemoryProblem" = "V06298",
+  "closeRelative.depression" = "V06344",
+  "closeRelative.anxiety" = "V06352",
+ 
+  #Family Cohesion
+  "family.respectEachother" = "V06523",
+  "proudOfFamily" = "V06528",
+  "family.enjoyTogetherFreeTime" = "V06530",
+  "family.closenessHindersPersonalGoals" = "V06533",
+  "family.argueCustoms" = "V06534",
+ 
+  #Finances
+  "finances.numberPplSupportingHousehold" = "V05315",
+  "afterLiquidationAndDebts.balance" = "V05312",
+  "financialNeedsMet" = "V05321",
+  "monthlyBillDifficulty" = "V05322",
+  "insuffFoodMoney.prevYear" = "V05325",
+ 
+  #Gambling
+  "gamble.totalCount" = "V04950",
+  "gamble.ageFirstExposure" = "V04962",
+ 
+  #Marriage
+  "marriage.divorceAnnulmentCount" = "V09403",
+  "marriage.regretMarriage" = "V05380",
+  "spouse.tooMuchAlcoholDrugs" = "V05406",
+  "spouse.jobDifficulty" = "V05415",
+  "spouse.financeDisagreement" = "V05373",
+  "spouse.lifePhilosophyDisagreement" = "V05376",
+  "spouse.majorDecisionDisagreement" = "V05377",
+  "spouse.quarrel" = "V05379",
+ 
+  #Personality
+  "personality.transparentFeelings" = "V03232",
+  "personality.indecisiveAbtSelfPath" = "V03240",
+  "personality.feelBadWhenHurtAnother" = "V03243",
+  "personality.willLieToAchieveGoal" = "V03245",
+  "personality.takeRiskyChances" = "V03247",
+  "personality.argueWhenStopped" = "V03252",
+  "personality.letOthersMakeBigDecisions" = "V03255",
+  "personality.dislikeAlone" = "V03256",
+  "personality.askAdviceAbtEverydayDecisions" = "V03257",
+  "personality.sociallyAwkward" = "V03261",
+  "personality.preferSoloActivities" = "V03263",
+  "personality.easyToGetCloseToOthers" = "V05514",
+ 
+  #Screening
+  "cigsPerDay" = "V04601",
+ 
+  #Neighborhood
+  "neighborhood.trustworthy" = "V06497",
+  "neighborhood.nightSafety" = "V06501",
+ 
+  #Social Networks
+  "freqTalkWithRelatives" = "V05501",
+  "freqArgueWithRelatives" = "V05505",
+  "freqFriendInteraction" = "V05506",
+  "freqTransparentPersonalProblems" = "V05513",
+ 
+   ##DX: Major Depressive Disorder
+  "depresDis.lifetime" = "V07876",
+  "depresDis.12Month" = "V07655",
+  "depresDis.30day" = "V07657",
+  "depresDis.onset" = "V08766",
+  "depresDis.recency" = "V08768",
+ 
+   ##DX: Major Depressive Episode
+  "depresEp.lifetime" = "V07877",
+  "depresEp.12Month" = "V07659",
+  "depresEp.30day" = "V07661",
+  "depresEp.onset" = "V08771",
+  "depresEp.recency" = "V08775",
+)
+
+cpes.cleaned <- cpes.cleaned %>% select(-starts_with("V") & -starts_with("NC") & -starts_with("NS") & -starts_with("NL") & -starts_with("CPES") & -c("SESTRAT", "SECLUSTR"))
+
+####convert appropriate variables to factor####
+cpes.cleaned %<>% mutate_at(
+  c("sex", "region", "maritalStatus","weightClass", "race", "employment.current", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day", "socialLifeDifficulty.30day", "afterLiquidationAndDebts.balance", "spouse.tooMuchAlcoholDrugs", "financialNeedsMet","monthlyBillDifficulty","insuffFoodMoney.prevYear", "spouse.jobDifficulty", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems", "homeless.historical", "neighborhood.trustworthy", "neighborhood.nightSafety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms", "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "religiousAttendance.freq", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel", "marriage.regretMarriage", "personality.easyToGetCloseToOthers", "motherAlive", "fatherAlive", "districtHadMiddleSchool", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.dangerousChores", "neglect.insuffSupervision", "neglect.parentSpendOnSelf", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.depression.hospitalized", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "depresDis.30day", "depresEp.30day", "depresEp.12Month", "depresEp.lifetime" ,"depresDis.12Month" ,"depresDis.lifetime"), as.factor)
+
+####convert appropriate variables to numeric####
+cpes.cleaned %<>% mutate_at(
+  c("age", "height.inches","householdIncome","timesMarried", "finances.numberPplSupportingHousehold", "livingChildren", "wksUnemployed.12month", "marriage.divorceAnnulmentCount", "yearsOfEducation.respondent", "workHrs.week","cigsPerDay","gamble.totalCount", "gamble.ageFirstExposure", "daysOvertime.30day", "motherDeath.respondentAge", "fatherDeath.respondentAge","highschool.numAttended", "closeFamily.alive", "parents.USBorn", "yearsOfEducation.father","yearsOfEducation.mother","employment.initialAge", "jobPerformance.30day", "depresEp.recency", "depresEp.onset","depresDis.recency","depresDis.onset", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "relativeWellOffRank.usPop", "relativeWellOffRank.local"), as.numeric)
+
+#####cat####
+cat <- cpes.cleaned[,names(cpes.cleaned)=="CASEID" | sapply(cpes.cleaned, is.factor)]
+cat$employment.current <- recode_factor(cat$employment.current, '1' = "Employed", '2' = "Unemployed", '3' = "Not In Labor Force")
+cat$physicalHealth.30day <- recode_factor(cat$physicalHealth.30day, '1' = "Better", '2' = "Worse", '3' = "About The Same")
+cat$homeless.historical <- recode_factor(cat$homeless.historical, '1' = "Yes", '5' = "No")
+cat$difficultyConcentrating.30day <- recode_factor(cat$difficultyConcentrating.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cat$difficultyUnderstandingSituation.30day <- recode_factor(cat$difficultyUnderstandingSituation.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cat$difficutlyRemembering.30day <- recode_factor(cat$difficutlyRemembering.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cat$socialLifeDifficulty.30day <- recode_factor(cat$socialLifeDifficulty.30day, '1' = "Yes", '5' = "No")
+cat$afterLiquidationAndDebts.balance <- recode_factor(cat$afterLiquidationAndDebts.balance, '1' = "Money Left", '2' = "Owe Money", '3' = "Debts Equal Assets", '4' = "Don't Owe Anything")
+cat$financialNeedsMet <- recode_factor(cat$financialNeedsMet, '1' = "More Than Need", '2' = "Just Enough", '3' = "Not Enough", '4' = "AAAAAAA", '5' = "AAAAAAA")
+cat$monthlyBillDifficulty <- recode_factor(cat$monthlyBillDifficulty, '1' = "Very Difficult", '2' = "Somewhat Difficult", '3' = "Not Very Difficult", '4' = "Not At All Difficult", '5' = "AAAAAAA")
+cat$insuffFoodMoney.prevYear <- recode_factor(cat$insuffFoodMoney.prevYear, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$spouse.tooMuchAlcoholDrugs <- recode_factor(cat$spouse.tooMuchAlcoholDrugs, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$spouse.jobDifficulty <- recode_factor(cat$spouse.jobDifficulty, '1' = "Yes", '5' = "No", '7' = "Does Not Apply/Spouse Never Worked")
+cat$freqTalkWithRelatives <- recode_factor(cat$freqTalkWithRelatives, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
+cat$freqArgueWithRelatives <- recode_factor(cat$freqArgueWithRelatives, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$freqFriendInteraction <- recode_factor(cat$freqFriendInteraction, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
+cat$freqTransparentPersonalProblems <- recode_factor(cat$freqTransparentPersonalProblems, '1' = "Always", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cat$freqTransparentPersonalProblems <- recode_factor(cat$freqTransparentPersonalProblems, '1' = "Yes", '2' = "No")
+cat$neighborhood.trustworthy <- recode_factor(cat$neighborhood.trustworthy, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
+cat$neighborhood.nightSafety <- recode_factor(cat$neighborhood.nightSafety, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
+cat$family.respectEachother <- recode_factor(cat$family.respectEachother, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cat$proudOfFamily <- recode_factor(cat$proudOfFamily, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cat$family.enjoyTogetherFreeTime <- recode_factor(cat$family.enjoyTogetherFreeTime, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cat$family.closenessHindersPersonalGoals <- recode_factor(cat$family.closenessHindersPersonalGoals, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
+cat$family.argueCustoms <- recode_factor(cat$family.argueCustoms, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
+cat$lessRespect.freq <- recode_factor(cat$lessRespect.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
+cat$nameCalled.freq <- recode_factor(cat$nameCalled.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
+cat$dislikedForRace <- recode_factor(cat$dislikedForRace, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$sex <- recode_factor(cat$sex, '1' = "Male", '2' = "Female")
+cat$depresDis.lifetime <- recode_factor(cat$depresDis.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
+cat$depresDis.12Month <- recode_factor(cat$depresDis.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
+cat$region <- recode_factor(cat$region, '1' = "Northeast", '2' = "Midwest", '3' = "South", '4' = "West")
+cat$maritalStatus <- recode_factor(cat$maritalStatus, '1' = "Married/Cohabiting", '2' = "Divorced/Separated/Widowed", '3' = "Never Married")
+cat$depresEp.lifetime <- recode_factor(cat$depresEp.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
+cat$depresEp.12Month <- recode_factor(cat$depresEp.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
+cat$religiousAttendance.freq <- recode_factor(cat$religiousAttendance.freq, '1' = "More Than Once A Week", '2' = "About Once A Week", '3' = "One To Three Times A Month", '4' = "Less Than Once A Month", '5' = "Never")
+cat$weightClass <- recode_factor(cat$weightClass, '1' = "Underweight", '2' = "Healthy", '3' = "Overweight", '4' = "Obesity Class 1", '5' = "Obesity Class 2", '5' = "Obesity Class 3")
+cat$depresEp.30day <- recode_factor(cat$depresEp.30day, '1' = "Endorsed", '5' = "Not Endorsed")
+cat$race <- recode_factor(cat$race, '1' = "Vietnamese", '2' = "Filipino", '3' = "Chinese", '4' = "All Other Asian", '5' = "Cuban", '6' = "PuertoRican", '7' = "Mexican", '8' = "All Other Hispanic", '9' = "Afro-Carribean", '10' = "African American", '11' = "Non-Hispanic Whites", '12' = "All Other")
+cat$personality.transparentFeelings <- recode_factor(cat$personality.transparentFeelings, '1' = "TRUE", '5' = "FALSE")
+cat$personality.indecisiveAbtSelfPath <- recode_factor(cat$personality.indecisiveAbtSelfPath, '1' = "TRUE", '5' = "FALSE")
+cat$personality.feelBadWhenHurtAnother <- recode_factor(cat$personality.feelBadWhenHurtAnother, '1' = "TRUE", '5' = "FALSE")
+cat$personality.willLieToAchieveGoal <- recode_factor(cat$personality.willLieToAchieveGoal, '1' = "TRUE", '5' = "FALSE")
+cat$personality.takeRiskyChances <- recode_factor(cat$personality.takeRiskyChances, '1' = "TRUE", '5' = "FALSE")
+cat$personality.letOthersMakeBigDecisions <- recode_factor(cat$personality.letOthersMakeBigDecisions, '1' = "TRUE", '5' = "FALSE")
+cat$personality.argueWhenStopped <- recode_factor(cat$personality.argueWhenStopped, '1' = "TRUE", '5' = "FALSE")
+cat$personality.dislikeAlone <- recode_factor(cat$personality.dislikeAlone, '1' = "TRUE", '5' = "FALSE")
+cat$personality.askAdviceAbtEverydayDecisions <- recode_factor(cat$personality.askAdviceAbtEverydayDecisions, '1' = "TRUE", '5' = "FALSE")
+cat$personality.sociallyAwkward <- recode_factor(cat$personality.sociallyAwkward, '1' = "TRUE", '5' = "FALSE")
+cat$personality.preferSoloActivities <- recode_factor(cat$personality.preferSoloActivities, '1' = "TRUE", '5' = "FALSE")
+cat$spouse.financeDisagreement <- recode_factor(cat$spouse.financeDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cat$spouse.lifePhilosophyDisagreement <- recode_factor(cat$spouse.lifePhilosophyDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cat$spouse.quarrel <- recode_factor(cat$spouse.quarrel, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cat$depresDis.30day <- recode_factor(cat$depresDis.30day, '1' = "Endorsed", '5' = "Not Endorsed")
+cat$spouse.majorDecisionDisagreement <- recode_factor(cat$spouse.majorDecisionDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cat$marriage.regretMarriage <- recode_factor(cat$marriage.regretMarriage, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cat$personality.easyToGetCloseToOthers <- recode_factor(cat$personality.easyToGetCloseToOthers,  '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cat$motherAlive <- recode_factor(cat$motherAlive, '1' = "Yes", '5' = "No")
+cat$fatherAlive <- recode_factor(cat$fatherAlive, '1' = "Yes", '5' = "No")
+cat$gradeSchool.relativeAge <- recode_factor(cat$gradeSchool.relativeAge, '1' = "Younger", '2' = "Older", '3' = "Average", '4' = "Varied")
+cat$districtHadMiddleSchool <- recode_factor(cat$districtHadMiddleSchool, '1' = "Yes", '5' = "No")
+cat$religiousImportance.childhood <- recode_factor(cat$religiousImportance.childhood, '1' = "Very Important", '2' = "Somewhat Important", '3' = "Not Very Important", '4' = "Not At All Important")
+cat$familyHeadWorkTime.female <- recode_factor(cat$familyHeadWorkTime.female, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
+cat$familyHeadWorkTime.male <- recode_factor(cat$familyHeadWorkTime.male, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
+cat$neglect.insuffSupervision <- recode_factor(cat$neglect.insuffSupervision, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$neglect.parentSpendOnSelf <- recode_factor(cat$neglect.parentSpendOnSelf, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$neglect.dangerousChores <- recode_factor(cat$neglect.dangerousChores, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$neglect.hunger <- recode_factor(cat$neglect.hunger, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$neglect.insuffMedical <- recode_factor(cat$neglect.insuffMedical, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cat$femaleCaretaker.closeness <- recode_factor(cat$femaleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
+cat$femaleCaretaker.strictRules <- recode_factor(cat$femaleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
+cat$femaleCaretaker.depression.hospitalized <- recode_factor(cat$femaleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
+cat$femaleCaretaker.depression <- recode_factor(cat$femaleCaretaker.depression, '1' = "Yes", '5' = "No")
+cat$femaleCaretaker.anxiety <- recode_factor(cat$femaleCaretaker.anxiety, '1' = "Yes", '5' = "No")
+cat$femaleCaretaker.physicalFights <- recode_factor(cat$femaleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
+cat$femaleCaretaker.crime <- recode_factor(cat$femaleCaretaker.crime, '1' = "Yes", '5' = "No")
+cat$femaleCaretaker.employmentDifficulty <- recode_factor(cat$femaleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.closeness <- recode_factor(cat$maleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
+cat$femaleCaretaker.suicideAttempt <- recode_factor(cat$femaleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.strictRules <- recode_factor(cat$maleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
+cat$maleCaretaker.depression.hospitalized <- recode_factor(cat$maleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.depression <- recode_factor(cat$maleCaretaker.depression, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.anxiety <- recode_factor(cat$maleCaretaker.anxiety, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.employmentDifficulty <- recode_factor(cat$maleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.physicalFights <- recode_factor(cat$maleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.crime <- recode_factor(cat$maleCaretaker.crime, '1' = "Yes", '5' = "No")
+cat$maleCaretaker.suicideAttempt <- recode_factor(cat$maleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
+cat$closeRelative.cancer <- recode_factor(cat$closeRelative.cancer, '1' = "Yes", '5' = "No")
+cat$closeRelative.seriousHeartProblem <- recode_factor(cat$closeRelative.seriousHeartProblem, '1' = "Yes", '5' = "No")
+cat$closeRelative.seriousMemoryProblem <- recode_factor(cat$closeRelative.seriousMemoryProblem, '1' = "Yes", '5' = "No")
+cat$closeRelative.depression <- recode_factor(cat$closeRelative.depression, '1' = "Yes", '5' = "No")
+cat$closeRelative.anxiety <- recode_factor(cat$closeRelative.anxiety, '1' = "Yes", '5' = "No")
+
+####cont#####
+cont <- cpes.cleaned[,names(cpes.cleaned)=="CASEID" | sapply(cpes.cleaned, is.numeric)]
+cont$householdIncome[cont$householdIncome < 10000] <- NA
+cont$parents.USBorn <- cont$parents.USBorn - rep(1, nrow(cont))
+cont$employment.initialAge[cont$employment.initialAge > cont$age] <- NA
+cont$fatherDeath.respondentAge[cont$fatherDeath.respondentAge > cont$age] <- NA
+cont$motherDeath.respondentAge[cont$motherDeath.respondentAge > cont$age] <- NA
+cont$closeFamily.alive[cont$closeFamily.alive > 25] <- NA
+
+disorder <- select(cpes.cleaned, c("CASEID", "depresDis.lifetime", "depresDis.12Month", "depresDis.30day", "depresDis.onset", "depresDis.recency"))
+episode <- select(cpes.cleaned, c("CASEID", "depresEp.lifetime", "depresEp.12Month", "depresEp.30day", "depresEp.onset", "depresEp.recency"))
+```
+
+```{r functions}
+##returns a dataframe where rows in df where var has a value less than n have been removed.
+lowSampSizVals <- function(df, col, n)
+{
+  table <- data.frame(table(df[,col]))
+  lowSize <- table[table$Freq > n,]
+  return(lowSize$Var1)
+}
+```
+
+```{r DEPRECATED subsetting, eval = F}
+demographic <- select(cpes.cleaned, c("CASEID", "age", "sex", "region", "race", "householdIncome", "yearsOfEducation.respondent", "weightClass","height.inches", "maritalStatus", "employment.current", "homeless.historical", "religiousAttendance.freq", "motherAlive", "fatherAlive", "wksUnemployed.12month", "workHrs.week", "neighborhood.trustworthy", "neighborhood.nightSafety"))
+childhood <- select(cpes.cleaned, c("CASEID", "parents.USBorn", "yearsOfEducation.father", "yearsOfEducation.mother", "motherDeath.respondentAge", "fatherDeath.respondentAge", "employment.initialAge","highschool.numAttended", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.insuffSupervision", "neglect.dangerousChores", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt"))
+temporalAssessments <- select(cpes.cleaned, c("CASEID", "physicalHealth.30day", "healthWorkAbsence.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day",  "daysMobilityDifficult.30day", "socialLifeDifficulty.30day", "daysOvertime.30day", "jobPerformance.30day"))
+social <- select(cpes.cleaned, c("CASEID",  "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems"))
+family <- select(cpes.cleaned, c("CASEID", "livingChildren", "closeFamily.alive", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms"))
+finances <- select(cpes.cleaned, c("CASEID", "finances.numberPplSupportingHousehold", "afterLiquidationAndDebts.balance", "financialNeedsMet", "monthlyBillDifficulty", "insuffFoodMoney.prevYear"))
+marriage <- select(cpes.cleaned, c("CASEID", "timesMarried", "marriage.divorceAnnulmentCount", "marriage.regretMarriage", "spouse.tooMuchAlcoholDrugs", "spouse.jobDifficulty", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel"))
+personality <- select(cpes.cleaned, c("CASEID", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "personality.easyToGetCloseToOthers"))
+badHabits <- select(cpes.cleaned, c("CASEID", "gamble.totalCount", "gamble.ageFirstExposure", "cigsPerDay"))
+```
+
+```{r view tables, eval = F}
+summary(cat)
+summary(cont)
+```
+
+<h1>Exploratory Data Analysis</h1>
+
+```{r eda region}
+region_caseID <- data.frame("CASEID" = cat$CASEID, "region" = cat$region)
+lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
+region_lifetimeDepressed <- inner_join(region_caseID, lifetimeDepressed_caseID, by = "CASEID")
+
+regionFreq <- as.data.frame(table(region_lifetimeDepressed$region, region_lifetimeDepressed$lifetimeDepressed))
+regionFreq <- regionFreq[order(regionFreq$Var1),]
+regionFreq <- mutate(regionFreq, regionPop = 0)
+
+for(i in 1:8)
+{
+  regionFreq[i,4] <- sum(regionFreq[regionFreq$Var1 == regionFreq[i, 1],]$Freq)
+}
+
+regionFreq <- mutate(regionFreq, rate = Freq/regionPop)
+region_lifetimeDepressed <- rename(regionFreq, "region" = Var1, "endorseLifetimeDepressed" = Var2)
+
+region_lifetimeDepressed.yes <- region_lifetimeDepressed[region_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
+region_lifetimeDepressed.yes <- region_lifetimeDepressed.yes[region_lifetimeDepressed.yes$regionPop >= 30,]
+
+regionEDAPlot <- plot_ly(region_lifetimeDepressed.yes, x = ~region, y = ~rate, type = 'bar') %>% 
+  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by region", xaxis = list(title = "Region (US Census)"), yaxis = list (title = "Percentage Diagnosed"))
+regionEDAPlot
+
+regionEDAPlot <- plot_ly(region_lifetimeDepressed.yes, x = ~region, y = ~regionPop, type = 'bar') %>% 
+  layout(title = "Sample representation of US Census regions", xaxis = list(title = "Region (US Census)"), yaxis = list (title = "Frequency"))
+regionEDAPlot
+```
+
+```{r eda sex}
+sex_caseID <- data.frame("CASEID" = cat$CASEID, "sex" = cat$sex)
+lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
+sex_lifetimeDepressed <- inner_join(sex_caseID, lifetimeDepressed_caseID, by = "CASEID")
+
+sexFreq <- as.data.frame(table(sex_lifetimeDepressed$sex, sex_lifetimeDepressed$lifetimeDepressed))
+sexFreq <- sexFreq[order(sexFreq$Var1),]
+sexFreq <- mutate(sexFreq, sexPop = 0)
+
+for(i in 1:4)
+{
+  sexFreq[i,4] <- sum(sexFreq[sexFreq$Var1 == sexFreq[i, 1],]$Freq)
+}
+
+sexFreq <- mutate(sexFreq, rate = Freq/sexPop)
+sex_lifetimeDepressed <- rename(sexFreq, "sex" = Var1, "endorseLifetimeDepressed" = Var2)
+
+sex_lifetimeDepressed.yes <- sex_lifetimeDepressed[sex_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
+sex_lifetimeDepressed.yes <- sex_lifetimeDepressed.yes[sex_lifetimeDepressed.yes$sexPop >= 30,]
+
+sexEDAPlot <- plot_ly(sex_lifetimeDepressed.yes, x = ~sex, y = ~rate, type = 'bar') %>% 
+  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by sex", xaxis = list(title = "sex"), yaxis = list (title = "Percentage Diagnosed"))
+sexEDAPlot
+
+sexEDAPlot <- plot_ly(sex_lifetimeDepressed.yes, x = ~sex, y = ~sexPop, type = 'bar') %>% 
+  layout(title = "Sample representation of sexes", xaxis = list(title = "sex"), yaxis = list (title = "Frequency"))
+sexEDAPlot
+```
+
+```{r eda age}
+age_caseID <- data.frame("CASEID" = cont$CASEID, "age" = cont$age)
+pastYearDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "pastYearDepressed" = cat$depresDis.12Month)
+age_pastYearDepressed <- inner_join(age_caseID, pastYearDepressed_caseID, by = "CASEID")
+
+ageFreq <- as.data.frame(table(age_pastYearDepressed$age, age_pastYearDepressed$pastYearDepressed))
+ageFreq <- ageFreq[order(ageFreq$Var1),]
+ageFreq <- mutate(ageFreq, agePop = 0)
+
+for(i in 1:162)
+{
+  ageFreq[i,4] <- sum(ageFreq[ageFreq$Var1 == ageFreq[i, 1],]$Freq)
+}
+
+ageFreq <- mutate(ageFreq, rate = Freq/agePop)
+age_pastYearDepressed <- rename(ageFreq, "age" = Var1, "endorsePastYearDepressed" = Var2)
+
+age_pastYearDepressed.yes <- age_pastYearDepressed[age_pastYearDepressed$endorsePastYearDepressed == "Endorsed",]
+age_pastYearDepressed.yes <- age_pastYearDepressed.yes[age_pastYearDepressed.yes$agePop >= 30,]
+
+ageEDAPlot <- plot_ly(age_pastYearDepressed.yes, x = ~age, y = ~rate, type = 'scatter', mode = 'lines') %>% 
+  layout(title = "Percentage of people diagnosed with major depressive disorder (past year) by age", xaxis = list(title = "Age"), yaxis = list (title = "Percentage Diagnosed"))
+ageEDAPlot
+
+ageEDAPlot <- plot_ly(age_pastYearDepressed.yes, x = ~age, y = ~agePop, type = 'bar') %>% 
+  layout(title = "Sample representation of ages", xaxis = list(title = "Age"), yaxis = list (title = "Frequency"))
+ageEDAPlot
+```
+
+```{r eda race}
+race_caseID <- data.frame("CASEID" = cat$CASEID, "race" = cat$race)
+lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
+race_lifetimeDepressed <- inner_join(race_caseID, lifetimeDepressed_caseID, by = "CASEID")
+
+raceFreq <- as.data.frame(table(race_lifetimeDepressed$race, race_lifetimeDepressed$lifetimeDepressed))
+raceFreq <- raceFreq[order(raceFreq$Var1),]
+raceFreq <- mutate(raceFreq, racePop = 0)
+
+for(i in 1:24)
+{
+  raceFreq[i,4] <- sum(raceFreq[raceFreq$Var1 == raceFreq[i, 1],]$Freq)
+}
+
+raceFreq <- mutate(raceFreq, rate = Freq/racePop)
+race_lifetimeDepressed <- rename(raceFreq, "race" = Var1, "endorseLifetimeDepressed" = Var2)
+
+race_lifetimeDepressed.yes <- race_lifetimeDepressed[race_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
+race_lifetimeDepressed.yes <- race_lifetimeDepressed.yes[race_lifetimeDepressed.yes$racePop >= 30,]
+
+raceEDAPlot <- plot_ly(race_lifetimeDepressed.yes, x = ~race, y = ~rate, type = 'bar') %>% 
+  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by race", xaxis = list(title = "race"), yaxis = list (title = "Percentage Diagnosed"))
+raceEDAPlot
+
+raceEDAPlot <- plot_ly(race_lifetimeDepressed.yes, x = ~race, y = ~racePop, type = 'bar') %>% 
+  layout(title = "Sample representation of races", xaxis = list(title = "race"), yaxis = list (title = "Frequency"))
+raceEDAPlot
+```
+
+```{r eda householdIncome}
+householdIncome_caseID <- data.frame("CASEID" = cont$CASEID, "householdIncome" = cont$householdIncome)
+lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
+householdIncome_lifetimeDepressed <- inner_join(householdIncome_caseID, lifetimeDepressed_caseID, by = "CASEID")
+
+householdIncomeFreq <- as.data.frame(table(householdIncome_lifetimeDepressed$householdIncome, householdIncome_lifetimeDepressed$lifetimeDepressed))
+householdIncomeFreq <- householdIncomeFreq[order(householdIncomeFreq$Var1),]
+householdIncomeFreq <- mutate(householdIncomeFreq, householdIncomePop = 0)
+
+for(i in 1:3442)
+{
+  householdIncomeFreq[i,4] <- sum(householdIncomeFreq[householdIncomeFreq$Var1 == householdIncomeFreq[i, 1],]$Freq)
+}
+
+householdIncomeFreq <- mutate(householdIncomeFreq, rate = Freq/householdIncomePop)
+householdIncome_lifetimeDepressed <- rename(householdIncomeFreq, "householdIncome" = Var1, "endorseLifetimeDepressed" = Var2)
+
+householdIncome_lifetimeDepressed.yes <- householdIncome_lifetimeDepressed[householdIncome_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
+householdIncome_lifetimeDepressed.yes <- householdIncome_lifetimeDepressed.yes[householdIncome_lifetimeDepressed.yes$householdIncomePop >= 30,]
+
+householdIncomeEDAPlot <- plot_ly(householdIncome_lifetimeDepressed.yes, x = ~householdIncome, y = ~rate, type = 'scatter', mode = 'lines') %>% 
+  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by income", xaxis = list(title = "household income"), yaxis = list (title = "Percentage Diagnosed"))
+householdIncomeEDAPlot
+
+householdIncomeEDAPlot <- plot_ly(householdIncome_lifetimeDepressed.yes, x = ~householdIncome, y = ~householdIncomePop, type = 'bar') %>% 
+  layout(title = "Sample representation of incomes", xaxis = list(title = "household income"), yaxis = list (title = "Frequency"))
+householdIncomeEDAPlot
+```
+
+```{r eda employment}
+employment.current_caseID <- data.frame("CASEID" = cat$CASEID, "employment.current" = cat$employment.current)
+pastYearDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "pastYearDepressed" = cat$depresDis.12Month)
+employment.current_pastYearDepressed <- inner_join(employment.current_caseID, pastYearDepressed_caseID, by = "CASEID")
+
+employment.currentFreq <- as.data.frame(table(employment.current_pastYearDepressed$employment.current, employment.current_pastYearDepressed$pastYearDepressed))
+employment.currentFreq <- employment.currentFreq[order(employment.currentFreq$Var1),]
+employment.currentFreq <- mutate(employment.currentFreq, employment.currentPop = 0)
+
+for(i in 1:24)
+{
+  employment.currentFreq[i,4] <- sum(employment.currentFreq[employment.currentFreq$Var1 == employment.currentFreq[i, 1],]$Freq)
+}
+
+employment.currentFreq <- mutate(employment.currentFreq, rate = Freq/employment.currentPop)
+employment.current_pastYearDepressed <- rename(employment.currentFreq, "employment.current" = Var1, "endorsePastYearDepressed" = Var2)
+
+employment.current_pastYearDepressed.yes <- employment.current_pastYearDepressed[employment.current_pastYearDepressed$endorsePastYearDepressed == "Endorsed",]
+employment.current_pastYearDepressed.yes <- employment.current_pastYearDepressed.yes[employment.current_pastYearDepressed.yes$employment.currentPop >= 30,]
+
+employment.currentEDAPlot <- plot_ly(employment.current_pastYearDepressed.yes, x = ~employment.current, y = ~rate, type = 'bar') %>% 
+  layout(title = "Percentage of people diagnosed with major depressive disorder (past yr) by employment", xaxis = list(title = "employment"), yaxis = list (title = "Percentage Diagnosed"))
+employment.currentEDAPlot
+
+employment.currentEDAPlot <- plot_ly(employment.current_pastYearDepressed.yes, x = ~employment.current, y = ~employment.currentPop, type = 'bar') %>% 
+  layout(title = "Sample representation of employment", xaxis = list(title = "employment"), yaxis = list (title = "Frequency"))
+employment.currentEDAPlot
+```
+
+```{r eda education}
+yearsOfEducation.respondent_caseID <- data.frame("CASEID" = cont$CASEID, "yearsOfEducation.respondent" = cont$yearsOfEducation.respondent)
+lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
+yearsOfEducation.respondent_lifetimeDepressed <- inner_join(yearsOfEducation.respondent_caseID, lifetimeDepressed_caseID, by = "CASEID")
+
+yearsOfEducation.respondentFreq <- as.data.frame(table(yearsOfEducation.respondent_lifetimeDepressed$yearsOfEducation.respondent, yearsOfEducation.respondent_lifetimeDepressed$lifetimeDepressed))
+yearsOfEducation.respondentFreq <- yearsOfEducation.respondentFreq[order(yearsOfEducation.respondentFreq$Var1),]
+yearsOfEducation.respondentFreq <- mutate(yearsOfEducation.respondentFreq, yearsOfEducation.respondentPop = 0)
+
+for(i in 1:24)
+{
+  yearsOfEducation.respondentFreq[i,4] <- sum(yearsOfEducation.respondentFreq[yearsOfEducation.respondentFreq$Var1 == yearsOfEducation.respondentFreq[i, 1],]$Freq)
+}
+
+yearsOfEducation.respondentFreq <- mutate(yearsOfEducation.respondentFreq, rate = Freq/yearsOfEducation.respondentPop)
+yearsOfEducation.respondent_lifetimeDepressed <- rename(yearsOfEducation.respondentFreq, "yearsOfEducation.respondent" = Var1, "endorseLifetimeDepressed" = Var2)
+
+yearsOfEducation.respondent_lifetimeDepressed.yes <- yearsOfEducation.respondent_lifetimeDepressed[yearsOfEducation.respondent_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
+yearsOfEducation.respondent_lifetimeDepressed.yes <- yearsOfEducation.respondent_lifetimeDepressed.yes[yearsOfEducation.respondent_lifetimeDepressed.yes$yearsOfEducation.respondentPop >= 30,]
+
+yearsOfEducation.respondentEDAPlot <- plot_ly(yearsOfEducation.respondent_lifetimeDepressed.yes, x = ~yearsOfEducation.respondent, y = ~rate, type = 'scatter', mode = 'lines') %>% 
+  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by education", xaxis = list(title = "education"), yaxis = list (title = "Percentage Diagnosed"))
+yearsOfEducation.respondentEDAPlot
+
+yearsOfEducation.respondentEDAPlot <- plot_ly(yearsOfEducation.respondent_lifetimeDepressed.yes, x = ~yearsOfEducation.respondent, y = ~yearsOfEducation.respondentPop, type = 'bar') %>% 
+  layout(title = "Sample representation of education", xaxis = list(title = "education (yrs)"), yaxis = list (title = "Frequency"))
+yearsOfEducation.respondentEDAPlot
+```
+
+```{r eda pairwise, eval = F, echo=F, fig.height=54, fig.width=96}
+ggpairs(cont[2:32])
+#TODO: Exclude depression variables
+```
+
+
+
+
+
+<h1>Variable Documentation (TODO)</h1>
+
+CASEID                                    
+employment.current [Cat][1: Employed, 2: Unemployed, 3: Not In Labor Force] - Work status of respondent at time of interview                    
+seriousSuicideThoughts [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
+suicideAttempt.num [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously
+seriousSuicideThoughts.12month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
+physicalHealth.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
+healthWorkAbsence.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
+difficultyConcentrating.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
+difficultyUnderstandingSituation.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
+difficutlyRemembering.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
+daysMobilityDifficult.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+socialLifeDifficulty.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
+afterLiquidationAndDebts.balance [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously          
+finances.numberPplSupportingHousehold [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously     
+financialNeedsMet [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
+monthlyBillDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
+insuffFoodMoney.prevYear [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+spouse.tooMuchAlcoholDrugs [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
+spouse.jobDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
+freqTalkWithRelatives [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
+freqArgueWithRelatives [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
+freqFriendInteraction [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
+freqTransparentPersonalProblems [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously          
+homeless.historical [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
+relativeWellOffRank.usPop [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
+relativeWellOffRank.local [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
+neighborhood.trustworthy [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+neighborhood.nightSafety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+family.respectEachother [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
+proudOfFamily [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
+family.enjoyTogetherFreeTime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
+family.closenessHindersPersonalGoals [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously      
+family.argueCustoms [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
+lessRespect.freq [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
+nameCalled.freq [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
+dislikedForRace [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
+sex [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                      
+age [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                      
+region [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                   
+depresDis.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
+depresDis.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
+depresDis.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+panicAtk.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
+panicAtk.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
+panicDis.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
+anxiety.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
+depresDis.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+anxiety.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
+panicAtk.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
+maritalStatus [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
+yearsOfEducation [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
+depresEp.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+depresEp.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
+depresEp.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+panicAtk.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
+panicDis.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
+panicDis.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
+anxiety.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
+conductDisorder.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
+conductDisorder.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+depresEp.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+panicDis.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
+depresEp.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
+anxiety.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
+panicAtk.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
+panicDis.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
+weightClass [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                              
+height.inches [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
+religiousAttendance.freq [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+wksUnemployed.12month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
+anxiety.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
+timesMarried [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                             
+marriage.divorceAnnulmentCount [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
+livingChildren [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
+schoolingCompleted.respondent [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
+race [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                     
+householdIncome [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
+workHrs.week [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                             
+personality.transparentFeelings [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously          
+personality.indecisiveAbtSelfPath [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
+personality.feelBadWhenHurtAnother [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
+personality.willLieToAchieveGoal [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
+personality.takeRiskyChances [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
+personality.argueWhenStopped [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
+personality.letOthersMakeBigDecisions [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
+personality.dislikeAlone [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+personality.askAdviceAbtEverydayDecisions [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously
+personality.sociallyAwkward [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
+personality.easyToGetCloseToOthers [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously     
+cigsPerDay [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                               
+gamble.totalCount [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
+gamble.ageFirstExposure [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
+conductDisorder.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+conductDisorder.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+depresDis.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+daysOvertime.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
+spouse.financeDisagreement [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
+spouse.lifePhilosophyDisagreement [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
+spouse.majorDecisionDisagreement [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously         
+spouse.quarrel [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
+marriage.regretMarriage [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+motherAlive [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                              
+motherDeath.respondentAge [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
+fatherAlive [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                             
+fatherDeath.respondentAge [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
+highschool.numAttended [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+districtHadMiddleSchool [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+gradeschool.relativeAge [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+religiousImportance.childhood [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously           
+awayHome.childhood [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
+familyHeadWorkTime.male [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+familyHeadWorkTime.female [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
+govAssist.childhood [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
+neglect.dangerousChores [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+neglect.insuffSupervision [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
+neglect.parentSpendOnSelf [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
+neglect.hunger [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
+neglect.insuffMedical [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+femaleCaretaker.closeness [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
+femaleCaretaker.strictRules [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
+femaleCaretaker.depression [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
+femaleCaretaker.depression.hospitalized [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
+femaleCaretaker.anxiety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
+femaleCaretaker.employmentDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
+femaleCaretaker.physicalFights [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
+femaleCaretaker.crime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
+femaleCaretaker.suicideAttempt [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously         
+maleCaretaker.closeness [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
+maleCaretaker.strictRules [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
+maleCaretaker.depression [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+maleCaretaker.depression.hospitalized [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
+maleCaretaker.anxiety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
+maleCaretaker.employmentDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously     
+maleCaretaker.physicalFights [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
+maleCaretaker.crime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
+maleCaretaker.suicideAttempt [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
+closeFamily.alive [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
+closeRelative.cancer [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
+closeRelative.seriousHeartProblem [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously      
+closeRelative.seriousMemoryProblem [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously        
+closeRelative.depression [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
+closeRelative.anxiety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
+Parents.USBorn                           
+yearsOfEducation.father                  
+yearsOfEducation.mother                  
+employment.initialAge                    
+jobPerformance.30day
+
+
+Sources:
+https://www.icpsr.umich.edu/web/ICPSR/studies/20240/summary (Publicly Available Dataset Download)
+https://www.icpsr.umich.edu/web/DSDR/search/variables?q=yescount&STUDYQ=20240 (Variable Documentation)
