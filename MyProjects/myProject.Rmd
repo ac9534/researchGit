@@ -2,7 +2,9 @@
 title: "myProject"
 author: "Alexander Chen"
 date: "7/21/2021"
-output: html_document
+output: 
+  rmdformats::readthedown:
+    number_sections: T
 ---
 
 ```{r setup, include=FALSE}
@@ -14,11 +16,11 @@ if(!require('pacman')) {
 pacman::p_load(ggplot2, dplyr, tidyverse, ggrepel, plotly, skimr, stargazer, contrast)
 ```
 
-## R Markdown
+# R Markdown
 ```{r read}
 data1 <- read.csv("data/heart.data.csv")
 ```
-
+## Nuggets
 ```{r regression}
 if("heart.disease" %in% names(data1)){
   data1 <- rename(data1, heartDisease = heart.disease)
@@ -28,3 +30,9 @@ summary(data1_lm)
 print("heartDisease = 14.98466 + 0.17833(smoking) - 0.20013(biking)") ##Check: Independent variables must not be correlated with eachother, but must be with the dependent variable
 ```
 
+&nbsp;
+<hr />
+<p style="text-align: center;">Alexander Chen</p>
+<p style="text-align: center;">With A Very Special Thanks To Prof. Linda Zhao</p>
+<p style="text-align: center;"><span style="color: #808080;"><em>alchen22@mlschools.org</em></span></p>
+&nbsp;

@@ -1,29 +1,44 @@
 ---
-title: "depressionStudy"
+title: "Depression Study"
 author: "Alexander Chen"
 date: "7/25/2021"
-output: html_document
+output: 
+  rmdformats::readthedown:
+    number_sections: T
+    code_folding: "hide"
+    fig_width: 12
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = T, cache = T, fig.width=8, fig.height=4,
-                      warning = F)
-options(scipen = 0, digits = 3)  ## controls base R output
+```{r setup, include = F}
+#Knit default settings
+knitr::opts_chunk$set(echo = T, fig.width=8, fig.height=4, warning = F)
 
-## Package setup
+#Options
+options(scipen = 0, digits = 3)
+
+#Load required packages
 if(!require("pacman")) install.packages("pacman")
-
-pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate,
-               plotROC, usmap, glmnet, plotly, haven, magrittr, Stat2Data, skimr, GGally)
+pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate, plyr, randomForest, caret, psych, rpart, rpart.plot,
+               plotROC, usmap, glmnet, plotly, haven, magrittr, Stat2Data, skimr, GGally, rmdformats, prettydoc)
 ```
 
-```{r intial load data, eval = T}
-cpes.raw <- read_sav("data/20240-0001-Data.sav")
+```{r initial load, eval = F}
+cpes.raw <- as.data.frame(read_sav("data/20240-0001-Data.sav"))
+if (file.exists("data/cpes.Rda")) {
+  file.remove("data/cpes.Rda")
+}
+saveRDS(cpes.raw, file = "data/cpes.Rda")
 ```
 
 <h1>Abstract</h1>
+blablabla
 
-```{r data cleaning}
+<h1>Data Cleaning</h1>
+
+<h2>Naming & Classification</h2>
+
+```{r dataclean: naming, eval = T}
+cpes.raw <- readRDS("data/cpes.Rda")
 cpes.cleaned <- cpes.raw %>% rename(
   "sex" = "V09036",
   "age" = "V07306",
@@ -34,14 +49,13 @@ cpes.cleaned <- cpes.raw %>% rename(
   "race" = "RANCEST",
   "householdIncome" = "V08683",
   "timesMarried" = "V09402",
-  "livingChildren" = "V09409",
   "yearsOfEducation.respondent" = "V03085",
   "parents.USBorn" = "V03125",
   "yearsOfEducation.father" = "V03081",
   "yearsOfEducation.mother" = "V03084",
   "employment.initialAge" = "V09390",
   "employment.current" = "V09154",
- 
+  
   #Adult Demographics
   "homeless.historical" = "V05633",
   "relativeWellOffRank.usPop" = "V05668",
@@ -51,7 +65,7 @@ cpes.cleaned <- cpes.raw %>% rename(
   "motherDeath.respondentAge" = "V05674",
   "fatherAlive" = "V05686",
   "fatherDeath.respondentAge" = "V05689",
- 
+  
   #Childhood Demographics
   "highschool.numAttended" = "V05732",
   "districtHadMiddleSchool" = "V05733",
@@ -82,7 +96,7 @@ cpes.cleaned <- cpes.raw %>% rename(
   "maleCaretaker.physicalFights" = "V05902",
   "maleCaretaker.crime" = "V05903",
   "maleCaretaker.suicideAttempt" = "V05906",
- 
+  
   #Temporal
   "physicalHealth.30day" = "V04445",
   "healthWorkAbsence.30day" = "V04452",
@@ -93,16 +107,16 @@ cpes.cleaned <- cpes.raw %>% rename(
   "socialLifeDifficulty.30day" = "V04483",
   "daysOvertime.30day" = "V05219",
   "jobPerformance.30day" = "V05239",
- 
+  
   #Discrimination
   "lessRespect.freq" = "V06539",
   "nameCalled.freq" = "V06545",
   "dislikedForRace" = "V06550",
- 
+  
   #Employment
   "wksUnemployed.12month" = "V05162",
   "workHrs.week" = "V05204",
- 
+  
   #Family Burden
   "closeFamily.alive" = "V06280",
   "closeRelative.cancer" = "V06282",
@@ -110,25 +124,25 @@ cpes.cleaned <- cpes.raw %>% rename(
   "closeRelative.seriousMemoryProblem" = "V06298",
   "closeRelative.depression" = "V06344",
   "closeRelative.anxiety" = "V06352",
- 
+  
   #Family Cohesion
   "family.respectEachother" = "V06523",
   "proudOfFamily" = "V06528",
   "family.enjoyTogetherFreeTime" = "V06530",
   "family.closenessHindersPersonalGoals" = "V06533",
   "family.argueCustoms" = "V06534",
- 
+  
   #Finances
   "finances.numberPplSupportingHousehold" = "V05315",
   "afterLiquidationAndDebts.balance" = "V05312",
   "financialNeedsMet" = "V05321",
   "monthlyBillDifficulty" = "V05322",
   "insuffFoodMoney.prevYear" = "V05325",
- 
+  
   #Gambling
   "gamble.totalCount" = "V04950",
   "gamble.ageFirstExposure" = "V04962",
- 
+  
   #Marriage
   "marriage.divorceAnnulmentCount" = "V09403",
   "marriage.regretMarriage" = "V05380",
@@ -138,7 +152,7 @@ cpes.cleaned <- cpes.raw %>% rename(
   "spouse.lifePhilosophyDisagreement" = "V05376",
   "spouse.majorDecisionDisagreement" = "V05377",
   "spouse.quarrel" = "V05379",
- 
+  
   #Personality
   "personality.transparentFeelings" = "V03232",
   "personality.indecisiveAbtSelfPath" = "V03240",
@@ -152,47 +166,166 @@ cpes.cleaned <- cpes.raw %>% rename(
   "personality.sociallyAwkward" = "V03261",
   "personality.preferSoloActivities" = "V03263",
   "personality.easyToGetCloseToOthers" = "V05514",
- 
+  
   #Screening
   "cigsPerDay" = "V04601",
- 
+  
   #Neighborhood
   "neighborhood.trustworthy" = "V06497",
   "neighborhood.nightSafety" = "V06501",
- 
+  
   #Social Networks
   "freqTalkWithRelatives" = "V05501",
   "freqArgueWithRelatives" = "V05505",
   "freqFriendInteraction" = "V05506",
   "freqTransparentPersonalProblems" = "V05513",
- 
-   ##DX: Major Depressive Disorder
-  "depresDis.lifetime" = "V07876",
-  "depresDis.12Month" = "V07655",
-  "depresDis.30day" = "V07657",
-  "depresDis.onset" = "V08766",
-  "depresDis.recency" = "V08768",
- 
-   ##DX: Major Depressive Episode
-  "depresEp.lifetime" = "V07877",
-  "depresEp.12Month" = "V07659",
-  "depresEp.30day" = "V07661",
-  "depresEp.onset" = "V08771",
-  "depresEp.recency" = "V08775",
+  
+  ##DX: Major Depressive Disorder
+  "disorder.lifetime" = "V07876",
+  "disorder.12Month" = "V07655",
+  "disorder.30day" = "V07657",
+  "disorder.onset" = "V08766",
+  "disorder.recency" = "V08768"
 )
+```
 
+Important variables were selected and renamed according to official documentation (found in the same folder as the raw data .sav file after downloading from this site: LINK)<br>
+
+Additionally, categorical and continuous variables were converted to factors and doubles respectively, for compatibility with later algorithms.<br>
+
+Categorical variables and continuous variables are listed below:<br>
+
+**Categorical (Refer to Appendix for Detailed Breakdown of Variable Categories):**<br>
+Current Employment Status (Time of Survey)<br>
+Marital Status (Time of Survey)<br>
+Mother Alive (Time of Survey)<br>
+Father Alive (Time of Survey)<br>
+Financial Stability After Liquidating and Paying Debts (Time of Survey)<br>
+Physical Health (Past 30 Days)<br>
+Difficulty Concentrating (Past 30 Days)<br>
+Difficulty Understanding Situations (Past 30 Days)<br>
+Difficulty Remembering (Past 30 Days)<br>
+Social Life Difficulty (Past 30 Days)<br>
+Financial Needs Met (Past Year)<br>
+Monthly Bill Difficulty (Past Year)<br>
+Freq Insufficient Money for Food (Past Year)<br>
+Spouse Takes Too Much Alcohol/Drugs (Past Year)<br>
+Spouse Has Trouble Finding Job (Past Year)<br>
+Freq Talk With Relatives (Past Year)<br>
+Freq Argue With Relatives (Past Year)<br>
+Freq Interact With Friends (Past Year)<br>
+Freq Transparent With Personal Problems (Past Year)<br>
+Homeless (Past or Present)<br>
+Trustworthy Neighborhood (Past Year)<br>
+Neighborhood Safe At Night (Past Year)<br>
+Family Mutual Respect (Past Year)<br>
+Proud of Family (Past Year)<br>
+Family Enjoys Free Time Together (Past Year)<br>
+Family Closeness Obstructs Personal Goals (Past Year)<br>
+Family Argues Customs (Past Year)<br>
+Freq Less Respect vs. Peers (Past Year)<br>
+Freq Name Called (Past Year)<br>
+Freq Disliked for Race (Past Year)<br>
+Weight Class (Past Year)<br>
+Freq Attend Church (Past Year)<br>
+Freq Disagree With Spouse on Finances (Past Year)<br>
+Freq Disagree With Spouse on Life Philosophy<br>
+Freq Disagree With Spouse on Major Decisions (Past Year)<br>
+Freq Quarrel with Spouse (Past Year)<br>
+Freq Regret Marriage (Past Year)<br>
+Close Relative has Cancer (Past Year)<br>
+Close Relative has Serious Heart Problem (Past Year)<br>
+Close Relative has Serious Memory Problem (Past Year)<br>
+Close Relative has Depression (Past Year)<br>
+Close Relative has Anxiety (Past Year)<br>
+District Had Middle School (Childhood)<br>
+Relative Age During Grade School (Childhood)<br>
+Religious Importance (Childhood)<br>
+Male Head Time Spend At Work (Childhood)<br>
+Female Head Time Spend At Work (Childhood)<br>
+Freq Doing Dangerous Chores (Childhood)<br>
+Freq Insufficiently Supervised (Childhood)<br>
+Freq Parent Neglected Respondent and Spent on Self (Childhood)<br>
+Freq Hungry Due To Neglect (Childhood)<br>
+Freq Insufficient Medical Care (Childhood)<br>
+Closeness to Female Caretaker (Childhood)<br>
+Female Caretaker had Strict Rules (Childhood)<br>
+Female Caretaker had Depression (Childhood)<br>
+Female Caretaker Hospitalized for Depression (Childhood)<br>
+Female Caretaker had Anxiety (Childhood)<br>
+Female Caretaker had Difficulty Finding Job (Childhood)<br>
+Female Caretaker had Physical Fights (Childhood)<br>
+Female Caretaker Engaged in Crime (Childhood)<br>
+Female Caretaker Attempted Suicide (Childhood)<br>
+Closeness to Male Caretaker (Childhood)<br>
+Male Caretaker had Strict Rules (Childhood)<br>
+Male Caretaker had Depression (Childhood)<br>
+Male Caretaker Hospitalized for Depression (Childhood)<br>
+Male Caretaker had Anxiety (Childhood)<br>
+Male Caretaker had Difficulty Finding Job (Childhood)<br>
+Male Caretaker had Physical Fights (Childhood)<br>
+Male Caretaker Engaged in Crime (Childhood)<br>
+Male Caretaker Attempted Suicide (Childhood)<br>
+Transparent Personality<br>
+Indecisive About Own Future<br>
+Feel Bad When Harm Another<br>
+Will Lie to Achieve Goals<br>
+Take Risks<br>
+Argue When Stopped<br>
+Let Others Make Big Decisions<br>
+Dislike Isolation<br>
+Ask Advice About Everyday Decisions<br>
+Easy to Get Close to Others<br>
+Socially Awkward<br>
+Prefer Solo Activities<br>
+Race<br>
+Sex<br>
+Region (US Census)<br>
+
+**Continuous:**<br>
+Age (Time of Survey)<br>
+Height (Time of Survey)<br>
+Number of People Financially Supporting Household (Time of Survey)<br>
+Health Related Work Absence (Past 30 Days)<br>
+Difficult Mobility (Past 30 Days)<br>
+Worked Overtime (Past 30 Days)<br>
+Job Performance (Past 30 Days)<br>
+Relative Well Being vs. USPop (Past Year)<br>
+Relative Well Being vs. Neighborhood (Past Year)<br>
+Work Hrs per Week (Past Year)<br>
+Household Income (Past Year)<br>
+Weeks Unemployed (Past Year)<br>
+Cigarettes per Day (Past Year)<br>
+Times Married<br>
+Number of Divorce/Annulments<br>
+Years of Education<br>
+Times Gambled<br>
+Age First Exposed to Gambling<br>
+Age at Time of Mother's Death<br>
+Age at Time of Father's Death<br>
+High-schools Attended<br>
+US Born Parents<br>
+Alive Close Family<br>
+Father Years of Education<br>
+Mother Years of Education<br>
+Age First Employed<br>
+
+<h2> Factoring and Subsetting </h2>
+
+```{r dataclean: factoring and subsetting, eval = T}
 cpes.cleaned <- cpes.cleaned %>% select(-starts_with("V") & -starts_with("NC") & -starts_with("NS") & -starts_with("NL") & -starts_with("CPES") & -c("SESTRAT", "SECLUSTR"))
 
 ####convert appropriate variables to factor####
 cpes.cleaned %<>% mutate_at(
-  c("sex", "region", "maritalStatus","weightClass", "race", "employment.current", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day", "socialLifeDifficulty.30day", "afterLiquidationAndDebts.balance", "spouse.tooMuchAlcoholDrugs", "financialNeedsMet","monthlyBillDifficulty","insuffFoodMoney.prevYear", "spouse.jobDifficulty", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems", "homeless.historical", "neighborhood.trustworthy", "neighborhood.nightSafety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms", "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "religiousAttendance.freq", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel", "marriage.regretMarriage", "personality.easyToGetCloseToOthers", "motherAlive", "fatherAlive", "districtHadMiddleSchool", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.dangerousChores", "neglect.insuffSupervision", "neglect.parentSpendOnSelf", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.depression.hospitalized", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "depresDis.30day", "depresEp.30day", "depresEp.12Month", "depresEp.lifetime" ,"depresDis.12Month" ,"depresDis.lifetime"), as.factor)
+  c("sex", "region", "maritalStatus","weightClass", "race", "employment.current", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day", "socialLifeDifficulty.30day", "afterLiquidationAndDebts.balance", "spouse.tooMuchAlcoholDrugs", "financialNeedsMet","monthlyBillDifficulty","insuffFoodMoney.prevYear", "spouse.jobDifficulty", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems", "homeless.historical", "neighborhood.trustworthy", "neighborhood.nightSafety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms", "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "religiousAttendance.freq", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel", "marriage.regretMarriage", "personality.easyToGetCloseToOthers", "motherAlive", "fatherAlive", "districtHadMiddleSchool", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.dangerousChores", "neglect.insuffSupervision", "neglect.parentSpendOnSelf", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.depression.hospitalized", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "disorder.30day" ,"disorder.12Month" ,"disorder.lifetime"), as.factor)
 
 ####convert appropriate variables to numeric####
 cpes.cleaned %<>% mutate_at(
-  c("age", "height.inches","householdIncome","timesMarried", "finances.numberPplSupportingHousehold", "livingChildren", "wksUnemployed.12month", "marriage.divorceAnnulmentCount", "yearsOfEducation.respondent", "workHrs.week","cigsPerDay","gamble.totalCount", "gamble.ageFirstExposure", "daysOvertime.30day", "motherDeath.respondentAge", "fatherDeath.respondentAge","highschool.numAttended", "closeFamily.alive", "parents.USBorn", "yearsOfEducation.father","yearsOfEducation.mother","employment.initialAge", "jobPerformance.30day", "depresEp.recency", "depresEp.onset","depresDis.recency","depresDis.onset", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "relativeWellOffRank.usPop", "relativeWellOffRank.local"), as.numeric)
+  c("age", "height.inches","householdIncome","timesMarried", "finances.numberPplSupportingHousehold", "wksUnemployed.12month", "marriage.divorceAnnulmentCount", "yearsOfEducation.respondent", "workHrs.week","cigsPerDay","gamble.totalCount", "gamble.ageFirstExposure", "daysOvertime.30day", "motherDeath.respondentAge", "fatherDeath.respondentAge","highschool.numAttended", "closeFamily.alive", "parents.USBorn", "yearsOfEducation.father","yearsOfEducation.mother","employment.initialAge", "jobPerformance.30day", "disorder.recency","disorder.onset", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "relativeWellOffRank.usPop", "relativeWellOffRank.local"), as.numeric)
 
 #####cat####
 cat <- cpes.cleaned[,names(cpes.cleaned)=="CASEID" | sapply(cpes.cleaned, is.factor)]
+cat <- select(cat, -c("disorder.lifetime", "disorder.12Month", "disorder.30day"))
 cat$employment.current <- recode_factor(cat$employment.current, '1' = "Employed", '2' = "Unemployed", '3' = "Not In Labor Force")
 cat$physicalHealth.30day <- recode_factor(cat$physicalHealth.30day, '1' = "Better", '2' = "Worse", '3' = "About The Same")
 cat$homeless.historical <- recode_factor(cat$homeless.historical, '1' = "Yes", '5' = "No")
@@ -201,8 +334,8 @@ cat$difficultyUnderstandingSituation.30day <- recode_factor(cat$difficultyUnders
 cat$difficutlyRemembering.30day <- recode_factor(cat$difficutlyRemembering.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
 cat$socialLifeDifficulty.30day <- recode_factor(cat$socialLifeDifficulty.30day, '1' = "Yes", '5' = "No")
 cat$afterLiquidationAndDebts.balance <- recode_factor(cat$afterLiquidationAndDebts.balance, '1' = "Money Left", '2' = "Owe Money", '3' = "Debts Equal Assets", '4' = "Don't Owe Anything")
-cat$financialNeedsMet <- recode_factor(cat$financialNeedsMet, '1' = "More Than Need", '2' = "Just Enough", '3' = "Not Enough", '4' = "AAAAAAA", '5' = "AAAAAAA")
-cat$monthlyBillDifficulty <- recode_factor(cat$monthlyBillDifficulty, '1' = "Very Difficult", '2' = "Somewhat Difficult", '3' = "Not Very Difficult", '4' = "Not At All Difficult", '5' = "AAAAAAA")
+cat$financialNeedsMet <- recode_factor(cat$financialNeedsMet, '1' = "More Than Need", '2' = "Just Enough", '3' = "Not Enough")
+cat$monthlyBillDifficulty <- recode_factor(cat$monthlyBillDifficulty, '1' = "Very Difficult", '2' = "Somewhat Difficult", '3' = "Not Very Difficult", '4' = "Not At All Difficult")
 cat$insuffFoodMoney.prevYear <- recode_factor(cat$insuffFoodMoney.prevYear, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
 cat$spouse.tooMuchAlcoholDrugs <- recode_factor(cat$spouse.tooMuchAlcoholDrugs, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
 cat$spouse.jobDifficulty <- recode_factor(cat$spouse.jobDifficulty, '1' = "Yes", '5' = "No", '7' = "Does Not Apply/Spouse Never Worked")
@@ -222,15 +355,10 @@ cat$lessRespect.freq <- recode_factor(cat$lessRespect.freq, '1' = "Almost Every 
 cat$nameCalled.freq <- recode_factor(cat$nameCalled.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
 cat$dislikedForRace <- recode_factor(cat$dislikedForRace, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
 cat$sex <- recode_factor(cat$sex, '1' = "Male", '2' = "Female")
-cat$depresDis.lifetime <- recode_factor(cat$depresDis.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
-cat$depresDis.12Month <- recode_factor(cat$depresDis.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
 cat$region <- recode_factor(cat$region, '1' = "Northeast", '2' = "Midwest", '3' = "South", '4' = "West")
 cat$maritalStatus <- recode_factor(cat$maritalStatus, '1' = "Married/Cohabiting", '2' = "Divorced/Separated/Widowed", '3' = "Never Married")
-cat$depresEp.lifetime <- recode_factor(cat$depresEp.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
-cat$depresEp.12Month <- recode_factor(cat$depresEp.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
 cat$religiousAttendance.freq <- recode_factor(cat$religiousAttendance.freq, '1' = "More Than Once A Week", '2' = "About Once A Week", '3' = "One To Three Times A Month", '4' = "Less Than Once A Month", '5' = "Never")
 cat$weightClass <- recode_factor(cat$weightClass, '1' = "Underweight", '2' = "Healthy", '3' = "Overweight", '4' = "Obesity Class 1", '5' = "Obesity Class 2", '5' = "Obesity Class 3")
-cat$depresEp.30day <- recode_factor(cat$depresEp.30day, '1' = "Endorsed", '5' = "Not Endorsed")
 cat$race <- recode_factor(cat$race, '1' = "Vietnamese", '2' = "Filipino", '3' = "Chinese", '4' = "All Other Asian", '5' = "Cuban", '6' = "PuertoRican", '7' = "Mexican", '8' = "All Other Hispanic", '9' = "Afro-Carribean", '10' = "African American", '11' = "Non-Hispanic Whites", '12' = "All Other")
 cat$personality.transparentFeelings <- recode_factor(cat$personality.transparentFeelings, '1' = "TRUE", '5' = "FALSE")
 cat$personality.indecisiveAbtSelfPath <- recode_factor(cat$personality.indecisiveAbtSelfPath, '1' = "TRUE", '5' = "FALSE")
@@ -246,7 +374,6 @@ cat$personality.preferSoloActivities <- recode_factor(cat$personality.preferSolo
 cat$spouse.financeDisagreement <- recode_factor(cat$spouse.financeDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
 cat$spouse.lifePhilosophyDisagreement <- recode_factor(cat$spouse.lifePhilosophyDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
 cat$spouse.quarrel <- recode_factor(cat$spouse.quarrel, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
-cat$depresDis.30day <- recode_factor(cat$depresDis.30day, '1' = "Endorsed", '5' = "Not Endorsed")
 cat$spouse.majorDecisionDisagreement <- recode_factor(cat$spouse.majorDecisionDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
 cat$marriage.regretMarriage <- recode_factor(cat$marriage.regretMarriage, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
 cat$personality.easyToGetCloseToOthers <- recode_factor(cat$personality.easyToGetCloseToOthers,  '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
@@ -288,409 +415,815 @@ cat$closeRelative.anxiety <- recode_factor(cat$closeRelative.anxiety, '1' = "Yes
 
 ####cont#####
 cont <- cpes.cleaned[,names(cpes.cleaned)=="CASEID" | sapply(cpes.cleaned, is.numeric)]
+cont <- select(cont, -c("disorder.onset", "disorder.recency"))
+
+disorder <- select(cpes.cleaned, c("CASEID", "disorder.lifetime", "disorder.12Month", "disorder.30day", "disorder.onset", "disorder.recency"))
+disorder$disorder.lifetime <- recode_factor(disorder$disorder.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
+disorder$disorder.12Month <- recode_factor(disorder$disorder.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
+disorder$disorder.30day <- recode_factor(disorder$disorder.30day, '1' = "Endorsed", '5' = "Not Endorsed")
+```
+
+We subset our data into separate data-frames of categorical and continuous variables for ease of use. We also rename factor levels accordingly.
+
+<h2> Extraneous Data Removal </h2>
+
+```{r extraneous data removal, eval = T}
 cont$householdIncome[cont$householdIncome < 10000] <- NA
 cont$parents.USBorn <- cont$parents.USBorn - rep(1, nrow(cont))
 cont$employment.initialAge[cont$employment.initialAge > cont$age] <- NA
 cont$fatherDeath.respondentAge[cont$fatherDeath.respondentAge > cont$age] <- NA
 cont$motherDeath.respondentAge[cont$motherDeath.respondentAge > cont$age] <- NA
 cont$closeFamily.alive[cont$closeFamily.alive > 25] <- NA
-
-disorder <- select(cpes.cleaned, c("CASEID", "depresDis.lifetime", "depresDis.12Month", "depresDis.30day", "depresDis.onset", "depresDis.recency"))
-episode <- select(cpes.cleaned, c("CASEID", "depresEp.lifetime", "depresEp.12Month", "depresEp.30day", "depresEp.onset", "depresEp.recency"))
 ```
 
-```{r functions}
-##returns a dataframe where rows in df where var has a value less than n have been removed.
-lowSampSizVals <- function(df, col, n)
-{
-  table <- data.frame(table(df[,col]))
-  lowSize <- table[table$Freq > n,]
-  return(lowSize$Var1)
-}
-```
-
-```{r DEPRECATED subsetting, eval = F}
-demographic <- select(cpes.cleaned, c("CASEID", "age", "sex", "region", "race", "householdIncome", "yearsOfEducation.respondent", "weightClass","height.inches", "maritalStatus", "employment.current", "homeless.historical", "religiousAttendance.freq", "motherAlive", "fatherAlive", "wksUnemployed.12month", "workHrs.week", "neighborhood.trustworthy", "neighborhood.nightSafety"))
-childhood <- select(cpes.cleaned, c("CASEID", "parents.USBorn", "yearsOfEducation.father", "yearsOfEducation.mother", "motherDeath.respondentAge", "fatherDeath.respondentAge", "employment.initialAge","highschool.numAttended", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.insuffSupervision", "neglect.dangerousChores", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt"))
-temporalAssessments <- select(cpes.cleaned, c("CASEID", "physicalHealth.30day", "healthWorkAbsence.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day",  "daysMobilityDifficult.30day", "socialLifeDifficulty.30day", "daysOvertime.30day", "jobPerformance.30day"))
-social <- select(cpes.cleaned, c("CASEID",  "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems"))
-family <- select(cpes.cleaned, c("CASEID", "livingChildren", "closeFamily.alive", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms"))
-finances <- select(cpes.cleaned, c("CASEID", "finances.numberPplSupportingHousehold", "afterLiquidationAndDebts.balance", "financialNeedsMet", "monthlyBillDifficulty", "insuffFoodMoney.prevYear"))
-marriage <- select(cpes.cleaned, c("CASEID", "timesMarried", "marriage.divorceAnnulmentCount", "marriage.regretMarriage", "spouse.tooMuchAlcoholDrugs", "spouse.jobDifficulty", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel"))
-personality <- select(cpes.cleaned, c("CASEID", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "personality.easyToGetCloseToOthers"))
-badHabits <- select(cpes.cleaned, c("CASEID", "gamble.totalCount", "gamble.ageFirstExposure", "cigsPerDay"))
-```
-
-```{r view tables, eval = F}
-summary(cat)
-summary(cont)
-```
+Extraneous or unusual data is either modified or removed.<br>
+Annual household incomes below 10,000 are removed, as there is high likelihood they are typos.<br>
+US Born Parent variable values are mutated to be one less than their original value so numeric values now align with number of US born parents.<br>
+Initial employment age, respondent age at mother's death, and respondent age at father's death are all removed if the value is greater than respondent's current age.
+Alive close family values above 25 are removed. Respondents likely did not interpret close family as commonly accepted.<br>
 
 <h1>Exploratory Data Analysis</h1>
+We conduct a brief EDA, looking at surface level trends in depression rate for region, sex, age, race, income, employment, and education
 
-```{r eda region}
-region_caseID <- data.frame("CASEID" = cat$CASEID, "region" = cat$region)
-lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
-region_lifetimeDepressed <- inner_join(region_caseID, lifetimeDepressed_caseID, by = "CASEID")
+<h2>Region</h2>
 
-regionFreq <- as.data.frame(table(region_lifetimeDepressed$region, region_lifetimeDepressed$lifetimeDepressed))
-regionFreq <- regionFreq[order(regionFreq$Var1),]
-regionFreq <- mutate(regionFreq, regionPop = 0)
+```{r eda region, eval = T, include = T}
+caseID_region <- data.frame("CASEID" = cat$CASEID, "region" = cat$region)
+caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
+region_depressed.lifetime <- inner_join(caseID_region, caseID_depressed.lifetime, by = "CASEID")
 
-for(i in 1:8)
-{
-  regionFreq[i,4] <- sum(regionFreq[regionFreq$Var1 == regionFreq[i, 1],]$Freq)
-}
+region_Pop <- as.data.frame(table(region_depressed.lifetime[,2])) %>% 
+  rename(region = Var1) %>% rename("regionPop" = Freq)
+region_depressedPop.lifetime <- as.data.frame(table(region_depressed.lifetime[region_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(region_depressed.lifetime$region))),-2] %>% 
+  rename("positive" = Freq)
 
-regionFreq <- mutate(regionFreq, rate = Freq/regionPop)
-region_lifetimeDepressed <- rename(regionFreq, "region" = Var1, "endorseLifetimeDepressed" = Var2)
+region_depressed.lifetime <- cbind(region_Pop, region_depressedPop.lifetime$positive) %>% rename(positive = 'region_depressedPop.lifetime$positive') %>% mutate(rate = positive / regionPop)
+region_depressed.lifetime <- region_depressed.lifetime[region_depressed.lifetime$regionPop >= 30,]
 
-region_lifetimeDepressed.yes <- region_lifetimeDepressed[region_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
-region_lifetimeDepressed.yes <- region_lifetimeDepressed.yes[region_lifetimeDepressed.yes$regionPop >= 30,]
+region_depressed.lifetime$region <- factor(region_depressed.lifetime$region, 
+                                           levels = unique(region_depressed.lifetime$region)[order(region_depressed.lifetime$rate, decreasing = F)])
+region_Pop$region <- factor(region_depressed.lifetime$region, 
+                            levels = unique(region_depressed.lifetime$region)[order(region_depressed.lifetime$rate, decreasing = F)])
 
-regionEDAPlot <- plot_ly(region_lifetimeDepressed.yes, x = ~region, y = ~rate, type = 'bar') %>% 
-  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by region", xaxis = list(title = "Region (US Census)"), yaxis = list (title = "Percentage Diagnosed"))
-regionEDAPlot
+regionDist.eda <- plot_ly(region_Pop, x = ~region, y = ~regionPop, type = 'bar') %>% 
+  layout(title = "Population by Region", xaxis = list(title = "Region"), yaxis = list(title = "Population", range = c(0, 8000)))
+regionDist.eda
 
-regionEDAPlot <- plot_ly(region_lifetimeDepressed.yes, x = ~region, y = ~regionPop, type = 'bar') %>% 
-  layout(title = "Sample representation of US Census regions", xaxis = list(title = "Region (US Census)"), yaxis = list (title = "Frequency"))
-regionEDAPlot
+region_depressed.lifetime.eda <- plot_ly(region_depressed.lifetime, x = ~region, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Diagnosed with MDD by region (Lifetime)", xaxis = list(title = "Region"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,1)))
+region_depressed.lifetime.eda
 ```
 
-```{r eda sex}
-sex_caseID <- data.frame("CASEID" = cat$CASEID, "sex" = cat$sex)
-lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
-sex_lifetimeDepressed <- inner_join(sex_caseID, lifetimeDepressed_caseID, by = "CASEID")
+The South appears to be over-represented in our sample. Though, that should not skew the depression rate measures in the second graph, in which the South appears to be the least depressed at 13% vs. the Midwest's 17%
 
-sexFreq <- as.data.frame(table(sex_lifetimeDepressed$sex, sex_lifetimeDepressed$lifetimeDepressed))
-sexFreq <- sexFreq[order(sexFreq$Var1),]
-sexFreq <- mutate(sexFreq, sexPop = 0)
+<h2>Gender</h2>
 
-for(i in 1:4)
-{
-  sexFreq[i,4] <- sum(sexFreq[sexFreq$Var1 == sexFreq[i, 1],]$Freq)
-}
+```{r eda sex, eval = T, include = T}
+caseID_sex <- data.frame("CASEID" = cat$CASEID, "sex" = cat$sex)
+caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
+sex_depressed.lifetime <- inner_join(caseID_sex, caseID_depressed.lifetime, by = "CASEID")
 
-sexFreq <- mutate(sexFreq, rate = Freq/sexPop)
-sex_lifetimeDepressed <- rename(sexFreq, "sex" = Var1, "endorseLifetimeDepressed" = Var2)
+sex_Pop <- as.data.frame(table(sex_depressed.lifetime[,2])) %>% 
+  rename(sex = Var1) %>% rename("sexPop" = Freq)
+sex_depressedPop.lifetime <- as.data.frame(table(sex_depressed.lifetime[sex_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(sex_depressed.lifetime$sex))),-2] %>% 
+  rename("positive" = Freq)
 
-sex_lifetimeDepressed.yes <- sex_lifetimeDepressed[sex_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
-sex_lifetimeDepressed.yes <- sex_lifetimeDepressed.yes[sex_lifetimeDepressed.yes$sexPop >= 30,]
+sex_depressed.lifetime <- cbind(sex_Pop, sex_depressedPop.lifetime$positive) %>% rename(positive = 'sex_depressedPop.lifetime$positive') %>% mutate(rate = positive / sexPop)
+sex_depressed.lifetime <- sex_depressed.lifetime[sex_depressed.lifetime$sexPop >= 30,]
 
-sexEDAPlot <- plot_ly(sex_lifetimeDepressed.yes, x = ~sex, y = ~rate, type = 'bar') %>% 
-  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by sex", xaxis = list(title = "sex"), yaxis = list (title = "Percentage Diagnosed"))
-sexEDAPlot
+sex_depressed.lifetime$sex <- factor(sex_depressed.lifetime$sex, 
+                                     levels = unique(sex_depressed.lifetime$sex)[order(sex_depressed.lifetime$rate, decreasing = F)])
+sex_Pop$sex <- factor(sex_depressed.lifetime$sex, 
+                      levels = unique(sex_depressed.lifetime$sex)[order(sex_depressed.lifetime$rate, decreasing = F)])
 
-sexEDAPlot <- plot_ly(sex_lifetimeDepressed.yes, x = ~sex, y = ~sexPop, type = 'bar') %>% 
-  layout(title = "Sample representation of sexes", xaxis = list(title = "sex"), yaxis = list (title = "Frequency"))
-sexEDAPlot
+sexDist.eda <- plot_ly(sex_Pop, x = ~sex, y = ~sexPop, type = 'bar') %>% 
+  layout(title = "Population by sex", xaxis = list(title = "sex"), yaxis = list(title = "Population", range = c(0, 12000)))
+sexDist.eda
+
+sex_depressed.lifetime.eda <- plot_ly(sex_depressed.lifetime, x = ~sex, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Diagnosed with MDD by sex (Lifetime)", xaxis = list(title = "sex"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,1)))
+sex_depressed.lifetime.eda
 ```
 
-```{r eda age}
-age_caseID <- data.frame("CASEID" = cont$CASEID, "age" = cont$age)
-pastYearDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "pastYearDepressed" = cat$depresDis.12Month)
-age_pastYearDepressed <- inner_join(age_caseID, pastYearDepressed_caseID, by = "CASEID")
+Females are over-represented in our sample. They also have a higher depression rate at 16.9% compared to 10.5% for males
 
-ageFreq <- as.data.frame(table(age_pastYearDepressed$age, age_pastYearDepressed$pastYearDepressed))
-ageFreq <- ageFreq[order(ageFreq$Var1),]
-ageFreq <- mutate(ageFreq, agePop = 0)
+<h2>Age</h2>
 
-for(i in 1:162)
-{
-  ageFreq[i,4] <- sum(ageFreq[ageFreq$Var1 == ageFreq[i, 1],]$Freq)
-}
+```{r eda age, eval = T, include = T}
+caseID_age <- data.frame("CASEID" = cont$CASEID, "age" = cont$age)
+caseID_depressed.12Month <- data.frame("CASEID" = disorder$CASEID, "depressed.12Month" = disorder$disorder.12Month)
+age_depressed.12Month <- inner_join(caseID_age, caseID_depressed.12Month, by = "CASEID")
 
-ageFreq <- mutate(ageFreq, rate = Freq/agePop)
-age_pastYearDepressed <- rename(ageFreq, "age" = Var1, "endorsePastYearDepressed" = Var2)
+age_Pop <- as.data.frame(table(age_depressed.12Month[,2])) %>% 
+  rename(age = Var1) %>% rename("agePop" = Freq)
+age_depressedPop.12Month <- as.data.frame(table(age_depressed.12Month[age_depressed.12Month$depressed.12Month == 'Endorsed', c(2, 3)]))[1:(length(unique(age_depressed.12Month$age))),-2] %>% 
+  rename("positive" = Freq)
 
-age_pastYearDepressed.yes <- age_pastYearDepressed[age_pastYearDepressed$endorsePastYearDepressed == "Endorsed",]
-age_pastYearDepressed.yes <- age_pastYearDepressed.yes[age_pastYearDepressed.yes$agePop >= 30,]
+age_depressed.12Month <- cbind(age_Pop, age_depressedPop.12Month$positive) %>% rename(positive = 'age_depressedPop.12Month$positive') %>% mutate(rate = positive / agePop)
+age_depressed.12Month <- age_depressed.12Month[age_depressed.12Month$agePop >= 30,]
 
-ageEDAPlot <- plot_ly(age_pastYearDepressed.yes, x = ~age, y = ~rate, type = 'scatter', mode = 'lines') %>% 
-  layout(title = "Percentage of people diagnosed with major depressive disorder (past year) by age", xaxis = list(title = "Age"), yaxis = list (title = "Percentage Diagnosed"))
-ageEDAPlot
+ageDist.eda <- plot_ly(age_Pop, x = ~age, y = ~agePop, type = 'bar') %>% 
+  layout(title = "Population by age", xaxis = list(title = "age"), yaxis = list(title = "Population", range = c(0, 600)))
+ageDist.eda
 
-ageEDAPlot <- plot_ly(age_pastYearDepressed.yes, x = ~age, y = ~agePop, type = 'bar') %>% 
-  layout(title = "Sample representation of ages", xaxis = list(title = "Age"), yaxis = list (title = "Frequency"))
-ageEDAPlot
+age_depressed.12Month.eda <- plot_ly(age_depressed.12Month, x = ~age, y = ~rate, type = 'scatter', mode = 'lines') %>% 
+  layout(title = "% Positive for MDD by age (12 Month)", xaxis = list(title = "age"), yaxis = list(title = "% Positive for MDD (12 Month)", range = c(0,0.5)))
+age_depressed.12Month.eda
 ```
 
-```{r eda race}
-race_caseID <- data.frame("CASEID" = cat$CASEID, "race" = cat$race)
-lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
-race_lifetimeDepressed <- inner_join(race_caseID, lifetimeDepressed_caseID, by = "CASEID")
+The age distribution matches that of the United States. For the graph of depression rates, ages from 87 to 99 were excluded, as they had less than 30 observations. Depression rate appears to generally trend downward as age increases.
 
-raceFreq <- as.data.frame(table(race_lifetimeDepressed$race, race_lifetimeDepressed$lifetimeDepressed))
-raceFreq <- raceFreq[order(raceFreq$Var1),]
-raceFreq <- mutate(raceFreq, racePop = 0)
+<h2>Race</h2>
 
-for(i in 1:24)
-{
-  raceFreq[i,4] <- sum(raceFreq[raceFreq$Var1 == raceFreq[i, 1],]$Freq)
-}
+```{r eda race, eval = T, include = T}
+caseID_race <- data.frame("CASEID" = cat$CASEID, "race" = cat$race)
+caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
+race_depressed.lifetime <- inner_join(caseID_race, caseID_depressed.lifetime, by = "CASEID")
 
-raceFreq <- mutate(raceFreq, rate = Freq/racePop)
-race_lifetimeDepressed <- rename(raceFreq, "race" = Var1, "endorseLifetimeDepressed" = Var2)
+race_Pop <- as.data.frame(table(race_depressed.lifetime[,2])) %>% 
+  rename(race = Var1) %>% rename("racePop" = Freq)
+race_depressedPop.lifetime <- as.data.frame(table(race_depressed.lifetime[race_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(race_depressed.lifetime$race))),-2] %>% 
+  rename("positive" = Freq)
 
-race_lifetimeDepressed.yes <- race_lifetimeDepressed[race_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
-race_lifetimeDepressed.yes <- race_lifetimeDepressed.yes[race_lifetimeDepressed.yes$racePop >= 30,]
+race_depressed.lifetime <- cbind(race_Pop, race_depressedPop.lifetime$positive) %>% rename(positive = 'race_depressedPop.lifetime$positive') %>% mutate(rate = positive / racePop)
+race_depressed.lifetime <- race_depressed.lifetime[race_depressed.lifetime$racePop >= 30,]
 
-raceEDAPlot <- plot_ly(race_lifetimeDepressed.yes, x = ~race, y = ~rate, type = 'bar') %>% 
-  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by race", xaxis = list(title = "race"), yaxis = list (title = "Percentage Diagnosed"))
-raceEDAPlot
+race_depressed.lifetime$race <- factor(race_depressed.lifetime$race, 
+                                       levels = unique(race_depressed.lifetime$race)[order(race_depressed.lifetime$rate, decreasing = F)])
+race_Pop$race <- factor(race_depressed.lifetime$race, 
+                        levels = unique(race_depressed.lifetime$race)[order(race_depressed.lifetime$rate, decreasing = F)])
 
-raceEDAPlot <- plot_ly(race_lifetimeDepressed.yes, x = ~race, y = ~racePop, type = 'bar') %>% 
-  layout(title = "Sample representation of races", xaxis = list(title = "race"), yaxis = list (title = "Frequency"))
-raceEDAPlot
+raceDist.eda <- plot_ly(race_Pop, x = ~race, y = ~racePop, type = 'bar') %>% 
+  layout(title = "Population by Race", xaxis = list(title = "Race"), yaxis = list(title = "Population", range = c(0, 8000)))
+raceDist.eda
+
+race_depressed.lifetime.eda <- plot_ly(race_depressed.lifetime, x = ~race, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Diagnosed with MDD by Race", xaxis = list(title = "Race"), yaxis = list(title = "% Diagnosed with MDD", range = c(0,1)))
+race_depressed.lifetime.eda
 ```
 
-```{r eda householdIncome}
-householdIncome_caseID <- data.frame("CASEID" = cont$CASEID, "householdIncome" = cont$householdIncome)
-lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
-householdIncome_lifetimeDepressed <- inner_join(householdIncome_caseID, lifetimeDepressed_caseID, by = "CASEID")
+The race distribution generally matches that of the United States. Depression rate appears to be the highest for "All Other" Minorities, Non-Hispanic Whites, and Puerto Ricans.
 
-householdIncomeFreq <- as.data.frame(table(householdIncome_lifetimeDepressed$householdIncome, householdIncome_lifetimeDepressed$lifetimeDepressed))
-householdIncomeFreq <- householdIncomeFreq[order(householdIncomeFreq$Var1),]
-householdIncomeFreq <- mutate(householdIncomeFreq, householdIncomePop = 0)
+<h2>Household Income</h2>
 
-for(i in 1:3442)
-{
-  householdIncomeFreq[i,4] <- sum(householdIncomeFreq[householdIncomeFreq$Var1 == householdIncomeFreq[i, 1],]$Freq)
-}
+```{r eda householdIncome, eval = T, include = T}
+caseID_householdIncome <- data.frame("CASEID" = cont$CASEID, "householdIncome" = cont$householdIncome)
+caseID_depressed.12Month <- data.frame("CASEID" = disorder$CASEID, "depressed.12Month" = disorder$disorder.12Month)
+householdIncome_depressed.12Month <- inner_join(caseID_householdIncome, caseID_depressed.12Month, by = "CASEID")
+householdIncome_depressed.12Month <- mutate(householdIncome_depressed.12Month, householdIncome = round_any(householdIncome, 5000, f = floor))
 
-householdIncomeFreq <- mutate(householdIncomeFreq, rate = Freq/householdIncomePop)
-householdIncome_lifetimeDepressed <- rename(householdIncomeFreq, "householdIncome" = Var1, "endorseLifetimeDepressed" = Var2)
+householdIncome_Pop <- as.data.frame(table(householdIncome_depressed.12Month[,2])) %>% 
+  rename(householdIncome = Var1) %>% 
+  rename(householdIncomePop = Freq)
+householdIncome_depressedPop.12Month <- as.data.frame(table(householdIncome_depressed.12Month[householdIncome_depressed.12Month$depressed.12Month == 'Endorsed', c(2, 3)]))[1:(length(unique(householdIncome_depressed.12Month$householdIncome))),-2] %>% 
+  rename("positive" = Freq)
 
-householdIncome_lifetimeDepressed.yes <- householdIncome_lifetimeDepressed[householdIncome_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
-householdIncome_lifetimeDepressed.yes <- householdIncome_lifetimeDepressed.yes[householdIncome_lifetimeDepressed.yes$householdIncomePop >= 30,]
+householdIncome_depressed.12Month <- merge(householdIncome_Pop, householdIncome_depressedPop.12Month, by = "householdIncome") %>% mutate(rate = positive / householdIncomePop)
+householdIncome_depressed.12Month <- householdIncome_depressed.12Month[householdIncome_depressed.12Month$householdIncomePop >= 30,]
 
-householdIncomeEDAPlot <- plot_ly(householdIncome_lifetimeDepressed.yes, x = ~householdIncome, y = ~rate, type = 'scatter', mode = 'lines') %>% 
-  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by income", xaxis = list(title = "household income"), yaxis = list (title = "Percentage Diagnosed"))
-householdIncomeEDAPlot
+householdIncome_depressed.12Month <- householdIncome_depressed.12Month[householdIncome_depressed.12Month$positive != 0,]
+householdIncome_depressed.12Month <- householdIncome_depressed.12Month[order(householdIncome_depressed.12Month$householdIncome),]
 
-householdIncomeEDAPlot <- plot_ly(householdIncome_lifetimeDepressed.yes, x = ~householdIncome, y = ~householdIncomePop, type = 'bar') %>% 
-  layout(title = "Sample representation of incomes", xaxis = list(title = "household income"), yaxis = list (title = "Frequency"))
-householdIncomeEDAPlot
+householdIncomeDist.eda <- plot_ly(householdIncome_Pop, x = ~householdIncome, y = ~householdIncomePop, type = 'bar') %>% 
+  layout(title = "Population by Annual Household Income (To Nearest 5k)", xaxis = list(title = "Population by Annual Household Income (Rounded to Nearest 5k)"), yaxis = list(title = "Population", range = c(0, 1500)))
+householdIncomeDist.eda
+
+householdIncome_depressed.12Month.eda <- plot_ly(householdIncome_depressed.12Month, x = ~householdIncome, y = ~rate, type = 'scatter', mode ='lines') %>% 
+  layout(title = "% Positive for MDD by Household Income", xaxis = list(title = "Annual Household Income (To Nearest 5k)"), yaxis = list(title = "% Positive for MDD", range = c(0,0.5)))
+householdIncome_depressed.12Month.eda
 ```
 
-```{r eda employment}
-employment.current_caseID <- data.frame("CASEID" = cat$CASEID, "employment.current" = cat$employment.current)
-pastYearDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "pastYearDepressed" = cat$depresDis.12Month)
-employment.current_pastYearDepressed <- inner_join(employment.current_caseID, pastYearDepressed_caseID, by = "CASEID")
+Income distribution appears to generally follow that of the United States, though our model has income capped at 200,000. Incomes have also been rounded to the nearest floor by increments of 5000, and observations of less than 30 have been omitted. Depression rate generally decreases from 10k to 100k, increases from 100k to 145k, drops at 150k, and remains steady afterward, with perhaps a slight increase.
 
-employment.currentFreq <- as.data.frame(table(employment.current_pastYearDepressed$employment.current, employment.current_pastYearDepressed$pastYearDepressed))
-employment.currentFreq <- employment.currentFreq[order(employment.currentFreq$Var1),]
-employment.currentFreq <- mutate(employment.currentFreq, employment.currentPop = 0)
+<h2>Employment</h2>
 
-for(i in 1:24)
-{
-  employment.currentFreq[i,4] <- sum(employment.currentFreq[employment.currentFreq$Var1 == employment.currentFreq[i, 1],]$Freq)
-}
+```{r eda employment, eval = T, include = T}
+caseID_employment.current <- data.frame("CASEID" = cat$CASEID, "employment.current" = cat$employment.current)
+caseID_depressed.12Month <- data.frame("CASEID" = disorder$CASEID, "depressed.12Month" = disorder$disorder.12Month)
+employment.current_depressed.12Month <- inner_join(caseID_employment.current, caseID_depressed.12Month, by = "CASEID")
 
-employment.currentFreq <- mutate(employment.currentFreq, rate = Freq/employment.currentPop)
-employment.current_pastYearDepressed <- rename(employment.currentFreq, "employment.current" = Var1, "endorsePastYearDepressed" = Var2)
+employment.current_Pop <- as.data.frame(table(employment.current_depressed.12Month[,2])) %>% 
+  rename(employment.current = Var1) %>% rename("employment.currentPop" = Freq)
+employment.current_depressedPop.12Month <- as.data.frame(table(employment.current_depressed.12Month[employment.current_depressed.12Month$depressed.12Month == 'Endorsed', c(2, 3)]))[1:(length(unique(employment.current_depressed.12Month$employment.current))),-2] %>% 
+  rename("positive" = Freq)
 
-employment.current_pastYearDepressed.yes <- employment.current_pastYearDepressed[employment.current_pastYearDepressed$endorsePastYearDepressed == "Endorsed",]
-employment.current_pastYearDepressed.yes <- employment.current_pastYearDepressed.yes[employment.current_pastYearDepressed.yes$employment.currentPop >= 30,]
+employment.current_depressed.12Month <- cbind(employment.current_Pop, employment.current_depressedPop.12Month[-4,2]) %>% rename(positive = 'employment.current_depressedPop.12Month[-4, 2]') %>% mutate(rate = positive / employment.currentPop)
+employment.current_depressed.12Month <- employment.current_depressed.12Month[employment.current_depressed.12Month$employment.currentPop >= 30,]
 
-employment.currentEDAPlot <- plot_ly(employment.current_pastYearDepressed.yes, x = ~employment.current, y = ~rate, type = 'bar') %>% 
-  layout(title = "Percentage of people diagnosed with major depressive disorder (past yr) by employment", xaxis = list(title = "employment"), yaxis = list (title = "Percentage Diagnosed"))
-employment.currentEDAPlot
+employment.current_depressed.12Month$employment.current <- factor(employment.current_depressed.12Month$employment.current, 
+                                                                  levels = unique(employment.current_depressed.12Month$employment.current)[order(employment.current_depressed.12Month$rate, decreasing = F)])
+employment.current_Pop$employment.current <- factor(employment.current_depressed.12Month$employment.current, 
+                                                    levels = unique(employment.current_depressed.12Month$employment.current)[order(employment.current_depressed.12Month$rate, decreasing = F)])
 
-employment.currentEDAPlot <- plot_ly(employment.current_pastYearDepressed.yes, x = ~employment.current, y = ~employment.currentPop, type = 'bar') %>% 
-  layout(title = "Sample representation of employment", xaxis = list(title = "employment"), yaxis = list (title = "Frequency"))
-employment.currentEDAPlot
+employment.currentDist.eda <- plot_ly(employment.current_Pop, x = ~employment.current, y = ~employment.currentPop, type = 'bar') %>% 
+  layout(title = "Population by Employment Status", xaxis = list(title = "Employment Status"), yaxis = list(title = "Population", range = c(0, 14000)))
+employment.currentDist.eda
+
+employment.current_depressed.12Month.eda <- plot_ly(employment.current_depressed.12Month, x = ~employment.current, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Positive for MDD by Employment Status", xaxis = list(title = "Employment Status"), yaxis = list(title = "% Positive with MDD", range = c(0,0.5)))
+employment.current_depressed.12Month.eda
 ```
 
-```{r eda education}
-yearsOfEducation.respondent_caseID <- data.frame("CASEID" = cont$CASEID, "yearsOfEducation.respondent" = cont$yearsOfEducation.respondent)
-lifetimeDepressed_caseID <- data.frame("CASEID" = cat$CASEID, "lifetimeDepressed" = cat$depresDis.lifetime)
-yearsOfEducation.respondent_lifetimeDepressed <- inner_join(yearsOfEducation.respondent_caseID, lifetimeDepressed_caseID, by = "CASEID")
+Employment distribution generally resembles that of the United States, save for a slightly higher than expected rate of respondents not in the labor force. Employment appears to lower depression rates, as "Not in Labor Force" and "Unemployed" groups have the highest depression rates.
+<h2>Education</h2>
 
-yearsOfEducation.respondentFreq <- as.data.frame(table(yearsOfEducation.respondent_lifetimeDepressed$yearsOfEducation.respondent, yearsOfEducation.respondent_lifetimeDepressed$lifetimeDepressed))
-yearsOfEducation.respondentFreq <- yearsOfEducation.respondentFreq[order(yearsOfEducation.respondentFreq$Var1),]
-yearsOfEducation.respondentFreq <- mutate(yearsOfEducation.respondentFreq, yearsOfEducation.respondentPop = 0)
+```{r eda education, eval = T, include = T}
+contDupli <- cont[cont$age >= 23,]
 
-for(i in 1:24)
-{
-  yearsOfEducation.respondentFreq[i,4] <- sum(yearsOfEducation.respondentFreq[yearsOfEducation.respondentFreq$Var1 == yearsOfEducation.respondentFreq[i, 1],]$Freq)
-}
+caseID_yearsOfEducation.respondent <- data.frame("CASEID" = contDupli$CASEID, "yearsOfEducation.respondent" = contDupli$yearsOfEducation.respondent)
+caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
+yearsOfEducation.respondent_depressed.lifetime <- inner_join(caseID_yearsOfEducation.respondent, caseID_depressed.lifetime, by = "CASEID")
 
-yearsOfEducation.respondentFreq <- mutate(yearsOfEducation.respondentFreq, rate = Freq/yearsOfEducation.respondentPop)
-yearsOfEducation.respondent_lifetimeDepressed <- rename(yearsOfEducation.respondentFreq, "yearsOfEducation.respondent" = Var1, "endorseLifetimeDepressed" = Var2)
+yearsOfEducation.respondent_Pop <- as.data.frame(table(yearsOfEducation.respondent_depressed.lifetime[,2])) %>% 
+  rename(yearsOfEducation.respondent = Var1) %>% rename("yearsOfEducation.respondentPop" = Freq)
+yearsOfEducation.respondent_depressedPop.lifetime <- as.data.frame(table(yearsOfEducation.respondent_depressed.lifetime[yearsOfEducation.respondent_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(yearsOfEducation.respondent_depressed.lifetime$yearsOfEducation.respondent))),-2] %>% 
+  rename("positive" = Freq)
 
-yearsOfEducation.respondent_lifetimeDepressed.yes <- yearsOfEducation.respondent_lifetimeDepressed[yearsOfEducation.respondent_lifetimeDepressed$endorseLifetimeDepressed == "Endorsed",]
-yearsOfEducation.respondent_lifetimeDepressed.yes <- yearsOfEducation.respondent_lifetimeDepressed.yes[yearsOfEducation.respondent_lifetimeDepressed.yes$yearsOfEducation.respondentPop >= 30,]
+yearsOfEducation.respondent_depressed.lifetime <- cbind(yearsOfEducation.respondent_Pop, yearsOfEducation.respondent_depressedPop.lifetime[-15,2]) %>% rename(positive = 'yearsOfEducation.respondent_depressedPop.lifetime[-15, 2]') %>% mutate(rate = positive / yearsOfEducation.respondentPop)
+yearsOfEducation.respondent_depressed.lifetime <- yearsOfEducation.respondent_depressed.lifetime[yearsOfEducation.respondent_depressed.lifetime$yearsOfEducation.respondentPop >= 30,]
 
-yearsOfEducation.respondentEDAPlot <- plot_ly(yearsOfEducation.respondent_lifetimeDepressed.yes, x = ~yearsOfEducation.respondent, y = ~rate, type = 'scatter', mode = 'lines') %>% 
-  layout(title = "Percentage of people diagnosed with major depressive disorder (lifetime) by education", xaxis = list(title = "education"), yaxis = list (title = "Percentage Diagnosed"))
-yearsOfEducation.respondentEDAPlot
+yearsOfEducation.respondentDist.eda <- plot_ly(yearsOfEducation.respondent_Pop, x = ~yearsOfEducation.respondent, y = ~yearsOfEducation.respondentPop, type = 'bar') %>% 
+  layout(title = "Population by Years of Education", xaxis = list(title = "Years of Education"), yaxis = list(title = "Population", range = c(0, 6000)))
+yearsOfEducation.respondentDist.eda
 
-yearsOfEducation.respondentEDAPlot <- plot_ly(yearsOfEducation.respondent_lifetimeDepressed.yes, x = ~yearsOfEducation.respondent, y = ~yearsOfEducation.respondentPop, type = 'bar') %>% 
-  layout(title = "Sample representation of education", xaxis = list(title = "education (yrs)"), yaxis = list (title = "Frequency"))
-yearsOfEducation.respondentEDAPlot
+yearsOfEducation.respondent_depressed.lifetime.eda <- plot_ly(yearsOfEducation.respondent_depressed.lifetime, x = ~yearsOfEducation.respondent, y = ~rate, type = 'scatter', mode = 'lines') %>% 
+  layout(title = "% Diagnosed with MDD by Years of Education (Lifetime)", xaxis = list(title = "Years of Education"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.5)))
+yearsOfEducation.respondent_depressed.lifetime.eda
 ```
 
-```{r eda pairwise, eval = F, echo=F, fig.height=54, fig.width=96}
-ggpairs(cont[2:32])
+The education distribution is as expected, and representative of the United States, with an expected peak at 12 years. To plot depression rates, respondents of less than 23 years of age were excluded for the purpose of modeling lifetime risk of depression. Save for a peak at 4 years of education, depression rates generally trend upwards as people get more educated, until it plateaus at around 13.
+
+<h2>Pairwise</h2>
+
+```{r eda pairwise, eval = T, include = T, fig.height=54, fig.width=96}
+pairs.panels(cont[2:27])
 #TODO: Exclude depression variables
 ```
 
+Pairwise plot of all continuous variables. High level assessment for multicollinearity, and potential interesting relationships between variables.
 
+<h1> Assessing 30 day Risk Of Testing Positive for MDD </h1>
 
+All predictive modeling techniques below will use the same testing set (NAs omitted) to determine MCE, Sensitivity, and Specificity. Training sets will be modified accordingly as not all models natively handle NAs. Via random sampling, all training sets are balanced to ensure an about equal distribution of endorsed and not endorsed observations. This is to prevent the model learning to predict consistently "not endorsed" without proper consideration of feature values, as our data is heavily skewed in that manner. The base training and testing set however, is made of a 65:20 split of all observations where 30 day depression endorsement is valid. The remaining 15 are allocated to a validation set for final model comparison.
 
+Variables of interest relevant to a 30 day prediction are: *physicalHealth* *socialLifeDifficulty*, *healthWorkAbsence*, difficultyRemembering,  daysMobilityDifficult, daysOvertime, difficultyConcentrating, difficultyUnderstandingSituation, and jobPerformance.
+
+Bolded variables have a missingness of less than 60%
+
+```{r 30 day initial, eval = F}
+#Create data: dataframe of all relevant vars to whether or not one has disorder in 30 day timeframe
+caseID_disorder.30day <- disorder[,c(1, 4)]
+relevantVarsCont <- select(cont, c("healthWorkAbsence.30day", "daysMobilityDifficult.30day", "daysOvertime.30day", "jobPerformance.30day", "CASEID"))
+relevantVarsCat <- select(cat, c("physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "socialLifeDifficulty.30day", "difficutlyRemembering.30day", "CASEID"))
+relevantVars <- merge(relevantVarsCat, relevantVarsCont, by = "CASEID")
+data <- merge(relevantVars, caseID_disorder.30day, by = "CASEID")
+data <- data[is.na(data$disorder.30day) == F,-1]
+levels(data$disorder.30day) <- list('1' = "Endorsed", '0' = "Not Endorsed")
+
+#Save unimputed data
+if (file.exists("data/30dayData_unimputed.Rda")) {
+  file.remove("data/30dayData_unimputed.Rda")
+}
+saveRDS(data, file = "data/30dayData_unimputed.Rda")
+
+#Create and save imputed data
+set.seed(100)
+data.imputed <- rfImpute(disorder.30day~., data = data)
+if (file.exists("data/30dayData_imputed.Rda")) {
+  file.remove("data/30dayData_imputed.Rda")
+}
+saveRDS(data.imputed, file = "data/30dayData_imputed.Rda")
+
+#Create ind: index used to create training and test sets
+set.seed(101)
+ind <- sample(3, nrow(data), replace = T, prob = c(0.65, 0.2, 0.15))
+
+#Prepare unimputed sets
+train <- data[ind == 1,]
+if (file.exists("data/30dayTrain_unimputed.Rda")) {
+  file.remove("data/30dayTrain_unimputed.Rda")
+}
+saveRDS(train, file = "data/30dayTrain_unimputed.Rda")
+testOne <- data[ind == 2,]
+if (file.exists("data/30dayTestOne_unimputed.Rda")) {
+  file.remove("data/30dayTestOne_unimputed.Rda")
+}
+saveRDS(testOne, file = "data/30dayTestOne_unimputed.Rda")
+testTwo <- data[ind == 3,]
+if (file.exists("data/30dayTestTwo_unimputed.Rda")) {
+  file.remove("data/30dayTestTwo_unimputed.Rda")
+}
+saveRDS(testTwo, file = "data/30dayTestTwo_unimputed.Rda")
+
+#Prepare imputed sets
+train <- data.imputed[ind == 1,]
+if (file.exists("data/30dayTrain_imputed.Rda")) {
+  file.remove("data/30dayTrain_imputed.Rda")
+}
+saveRDS(train, file = "data/30dayTrain_imputed.Rda")
+
+testOne <- data.imputed[ind == 2,]
+if (file.exists("data/30dayTestOne_imputed.Rda")) {
+  file.remove("data/30dayTestOne_imputed.Rda")
+}
+saveRDS(testOne, file = "data/30dayTestOne_imputed.Rda")
+
+testTwo <- data.imputed[ind == 3,]
+if (file.exists("data/30dayTestTwo_imputed.Rda")) {
+  file.remove("data/30dayTestTwo_imputed.Rda")
+}
+saveRDS(testTwo, file = "data/30dayTestTwo_imputed.Rda")
+```
+
+<h2>Null Model</h2>
+Assume MCE = 50%, Sensitivity: 50%, Specificity: 50%
+
+<h2>Single Tree</h2>
+```{r tree 30day,  eval = T, include = T}
+# Imputed (Initial)
+# Accuracy : 0.772         
+# Sensitivity : 0.6029        
+# Specificity : 0.7758  
+
+# Imputed (First Iteration)
+# Accuracy : 0.78         
+# Sensitivity : 0.588        
+# Specificity : 0.784  
+
+# Imputed (Second Iteration)
+# Accuracy : 0.83         
+# Sensitivity : 0.573        
+# Specificity : 0.835
+
+# Imputed (Third Iteration)
+# Accuracy : 0.828         
+# Sensitivity : 0.6029        
+# Specificity : 0.8328
+
+# Imputed (Fourth Iteration)
+# Accuracy : 0.828         
+# Sensitivity : 0.6029        
+# Specificity : 0.8328
+
+# Imputed (Fifth Iteration) OPTIMAL
+# Accuracy : 0.828         
+# Sensitivity : 0.6029        
+# Specificity : 0.8331
+
+# Imputed (Sixth Iteration)
+# Accuracy : 0.834        
+# Sensitivity : 0.5882       
+# Specificity : 0.8395
+
+# Imputed (Seventh Iteration)
+# Accuracy : 0.892    
+# Sensitivity : 0.4706       
+# Specificity : 0.9015
+
+# Imputed (Eighth Iteration)
+# Accuracy : 0.913
+# Sensitivity : 0.35294       
+# Specificity : 0.92527
+train <- readRDS("data/30dayTrain_imputed.Rda")
+
+# Unimputed (initial)
+# Accuracy : 0.72          
+# Sensitivity : 0.7353        
+# Specificity : 0.7198  
+# train <- readRDS("data/30dayTrain_unimputed.Rda")
+
+train.endorsed <- train[train$disorder.30day == "1",]
+train.notEndorsed <- train[train$disorder.30day == "0",]
+prob <- nrow(train.endorsed)/nrow(train.notEndorsed)
+set.seed(99)
+ind <- sample(2, nrow(train.notEndorsed), replace = T, prob = c(prob, 1-prob))
+train.notEndorsed <- train.notEndorsed[ind == 1,]
+train.balanced <- rbind(train.notEndorsed, train.endorsed)
+
+testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
+
+tree.fit <- rpart(disorder.30day~., data = train.balanced, method = "class")
+tree.fit.pred <- predict(tree.fit, testOne, type = "class")
+confusionMatrix(tree.fit.pred, testOne$disorder.30day)
+tree.fit$variable.importance[order(tree.fit$variable.importance)]
+
+train.balanced.iter1 <- select(train.balanced, -c("jobPerformance.30day"))
+tree.fit.iter1 <- rpart(disorder.30day~., data = train.balanced.iter1, method = "class")
+tree.fit.iter1.pred <- predict(tree.fit.iter1, testOne, type = "class")
+confusionMatrix(tree.fit.iter1.pred, testOne$disorder.30day)
+tree.fit.iter1$variable.importance[order(tree.fit.iter1$variable.importance)]
+
+train.balanced.iter2 <- select(train.balanced, -c("jobPerformance.30day", "daysMobilityDifficult.30day"))
+tree.fit.iter2 <- rpart(disorder.30day~., data = train.balanced.iter2, method = "class")
+tree.fit.iter2.pred <- predict(tree.fit.iter2, testOne, type = "class")
+confusionMatrix(tree.fit.iter2.pred, testOne$disorder.30day)
+tree.fit.iter2$variable.importance[order(tree.fit.iter2$variable.importance)]
+
+train.balanced.iter3 <- select(train.balanced, -c("jobPerformance.30day", "daysMobilityDifficult.30day", "daysOvertime.30day"))
+tree.fit.iter3 <- rpart(disorder.30day~., data = train.balanced.iter3, method = "class")
+tree.fit.iter3.pred <- predict(tree.fit.iter3, testOne, type = "class")
+confusionMatrix(tree.fit.iter3.pred, testOne$disorder.30day)
+tree.fit.iter3$variable.importance[order(tree.fit.iter3$variable.importance)]
+
+train.balanced.iter4 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day"))
+tree.fit.iter4 <- rpart(disorder.30day~., data = train.balanced.iter4, method = "class")
+tree.fit.iter4.pred <- predict(tree.fit.iter4, testOne, type = "class")
+confusionMatrix(tree.fit.iter4.pred, testOne$disorder.30day)
+tree.fit.iter4$variable.importance[order(tree.fit.iter4$variable.importance)]
+
+train.balanced.iter5 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day"))
+tree.fit.iter5 <- rpart(disorder.30day~., data = train.balanced.iter5, method = "class")
+tree.fit.iter5.pred <- predict(tree.fit.iter5, testOne, type = "class")
+confusionMatrix(tree.fit.iter5.pred, testOne$disorder.30day)
+tree.fit.iter5$variable.importance[order(tree.fit.iter5$variable.importance)]
+
+train.balanced.iter6 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day", "difficutlyRemembering.30day"))
+tree.fit.iter6 <- rpart(disorder.30day~., data = train.balanced.iter6, method = "class")
+tree.fit.iter6.pred <- predict(tree.fit.iter6, testOne, type = "class")
+confusionMatrix(tree.fit.iter6.pred, testOne$disorder.30day)
+tree.fit.iter6$variable.importance[order(tree.fit.iter6$variable.importance)]
+
+train.balanced.iter7 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day", "difficutlyRemembering.30day", "healthWorkAbsence.30day"))
+tree.fit.iter7 <- rpart(disorder.30day~., data = train.balanced.iter7, method = "class")
+tree.fit.iter7.pred <- predict(tree.fit.iter7, testOne, type = "class")
+confusionMatrix(tree.fit.iter7.pred, testOne$disorder.30day)
+tree.fit.iter7$variable.importance[order(tree.fit.iter7$variable.importance)]
+
+train.balanced.iter8 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day", "difficutlyRemembering.30day", "healthWorkAbsence.30day", "difficultyUnderstandingSituation.30day"))
+tree.fit.iter8 <- rpart(disorder.30day~., data = train.balanced.iter8, method = "class")
+tree.fit.iter8.pred <- predict(tree.fit.iter8, testOne, type = "class")
+confusionMatrix(tree.fit.iter8.pred, testOne$disorder.30day)
+tree.fit.iter8$variable.importance[order(tree.fit.iter8$variable.importance)]
+
+tree.fit.iter5$variable.importance
+rpart.plot(tree.fit.iter5)
+```
+
+We identify our optimal tree as the one with the lowest overall MCE while maintaining a high Sensitivity and Specificity. Trees were trained on two versions of the training set, imputed and unimputed. Missing values in the imputed training set were imputed using rfImpute from the randomForest package. Our best tree was iteration 5 of the imputed training set, with MCE = 0.172, Sensitivity = 0.6029, Specificity = 0.8331, and important variables socialLifeDifficulty, difficultyUnderstandingSituation, healthWorkAbsence, and difficultyRemembering (ordered from most to least important)
+
+<h2>Random Forest</h2>
+
+Forests were grown from preimputed (rfImpute performed on entire dataset of interest variables, training set was then selected from imputed dataset), postimputed (rfImpute performed on training set selected from dataset still with NAs), and unimputed training sets (randomForest cannot handle NAs, so NAs were omitted for unimputed training sets). Additionally, the procedures were repeated for two sets of variables: "allVars" and "goodVars". "allVars" contains all 9 variables of interest, while "goodVars" contains only the ones with missingness below 60%.
+
+Once more, we identify our optimal forest as the one with the lowest overall MCE while maintaining a high Sensitivity and Specificity.
+
+#Best True Positive Rate, Horrible Overall Accuracy/MCE
+```{r rfSetup: allVars preimputed, eval = T}
+train <- readRDS("data/30dayTrain_imputed.Rda")
+
+testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
+
+# Optimal mtry: 6
+# OOB Error: 32.8%
+# Sensitivity : 0.833         
+# Specificity : 0.25 
+# Accuracy : 0.326
+```
+
+#Postimputed Best Balance
+```{r rfSetup: allVars postimputed/unimputed, eval = T}
+train <- readRDS("data/30dayTrain_unimputed.Rda")
+#Remove all rows with more "num" NAs. Set to 0 to do unimputed training
+num <- 3
+train <- train[(rowSums(is.na(train)) <= num),]
+set.seed(102)
+if(num != 0){
+  train <- rfImpute(disorder.30day~., data = train) #Impute missing values
+}
+
+testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
+
+# Optimal num: 3
+# Optimal mtry: 4
+# OOB estimate of  error rate: 44.4%
+# Accuracy: 0.63 
+# Sensitivity: 0.667  
+# Specificity: 0.625 
+
+#Unimputed results in balanced training set of size 15
+```
+
+#Comparable to "Best Balance". Better True Negative, Worse True Positive. Tested on larger test set.
+```{r rfSetup: goodVars preimputed, eval = T}
+train <- readRDS("data/30dayTrain_imputed.Rda")
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+
+testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+
+# Optimal mtry: 2
+# OOB estimate of  error rate: 30.9%
+# Accuracy: 0.689  
+# Sensitivity: 0.55  
+# Specificity: 0.694
+```
+
+#Best True Negative Rate & Overall Accuracy
+```{r rfSetup: goodVars postimputed/unimputed, eval = T}
+train <- readRDS("data/30dayTrain_unimputed.Rda")
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+num <- 0 #Remove all rows with more "num" NAs. Set to 0 to do unimputed training
+train <- train[(rowSums(is.na(train)) <= num),]
+set.seed(103)
+if(num != 0){
+  train <- rfImpute(disorder.30day~., data = train)
+}
+
+testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+
+# Optimal num: 0 (Unimputed)
+# Optimal mtry: 2
+# OOB estimate of  error rate: 43%
+# Accuracy: 0.843 
+# Sensitivity: 0.475  
+# Specificity: 0.857
+```
+
+```{r rfBody, eval = T}
+################################################number of variables, 9 for allVars, 3 for goodVars
+n <- 9
+
+#Create balanced training set, where num endorsed ~ num not endorsed
+train.endorsed <- train[train$disorder.30day == "1",]
+train.notEndorsed <- train[train$disorder.30day == "0",]
+prob <- nrow(train.endorsed)/nrow(train.notEndorsed)
+set.seed(104)
+ind <- sample(2, nrow(train.notEndorsed), replace = T, prob = c(prob, 1-prob))
+train.notEndorsed <- train.notEndorsed[ind == 1,]
+train.balanced <- rbind(train.notEndorsed, train.endorsed)
+
+rf.error.p <- rep(0, n)
+for (p in 1:n){
+  rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = p)
+  rf.error.p[p] <- rf.fit$err.rate[500]
+}
+plot(1:n, rf.error.p, pch=16,
+     main = "OOB Error Rate for mtry With 500 Trees",
+     xlab="mtry",
+     ylab="OOB Error Rate")
+lines(1:n, rf.error.p)
+
+rf.error.p <- rep(0, n)
+for (p in 1:n){
+  rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = p)
+  rf.fit.pred <- predict(rf.fit, testOne)
+  rf.error.p[p] <- confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[1] #True Positive
+}
+plot(1:n, rf.error.p, pch=16,
+     main = "TestOne True Positive Rate for mtry",
+     xlab="mtry",
+     ylab="True Positive Rate")
+lines(1:n, rf.error.p)
+
+rf.error.p <- rep(0, n)
+for (p in 1:n){
+  rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = p)
+  rf.fit.pred <- predict(rf.fit, testOne)
+  rf.error.p[p] <- confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[2] #True Negative
+}
+plot(1:n, rf.error.p, pch=16,
+     main = "TestOne True Negative Rate for mtry",
+     xlab="mtry",
+     ylab="True Negative Rate")
+lines(1:n, rf.error.p)
+
+#Final Model
+set.seed(105)
+rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = 2, proximity = T) ########################Modify mtry
+rf.fit
+varImpPlot(rf.fit, sort=T, n.var=min(10, nrow(rf.fit$importance)))
+hist(treesize(rf.fit), main = "No. of nodes", col = "blue")
+
+#CANNOT HANDLE NA VALUES FOR FEATURES IN TEST SETS
+rf.fit.pred <- predict(rf.fit, testOne)
+confusionMatrix(rf.fit.pred, testOne$disorder.30day)$overall[1] #Accuracy
+confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[1] #True Positive
+confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[2] #True Negative
+
+MDSplot(rf.fit, testOne$disorder.30day)
+```
+
+The best model was our postimputed forest with mtry = 4, and number of NAs allowed in training set before imputation set to 3: MCE = 44.4%, Sensitivity = 0.667, Specificity = 0.625. Ranked by importance according to mean decrease gini, the most important variables were daysMobilityDifficult, jobPerformance, and daysOvertime. For important variables, this appears to contradict our single tree model.
+
+<h2>LASSO</h2>
+
+Like randomForest, our LASSO function cannot handle NA values in either the testing or the training sets. LASSO algorithms will trained on preimputed, postimputed, and unimputed training sets for both "allVars" and "goodVars". The criterion for selecting optimal algorithm remains the same.
+
+```{r lassoSetup: allVars preimputed, eval = T}
+train <- readRDS("data/30dayTrain_imputed.Rda")
+testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
+
+# Training Error: 0.27
+# Testing Error: 0.152
+# Testing Sensitivity: 0.333
+# Testing Specificity: 0.884
+#Optimal Threshold: 0.02
+```
+
+```{r lassoSetup: allVars postimputed/unimputed, eval = T}
+train <- readRDS("data/30dayTrain_unimputed.Rda")
+#Remove all rows with more than "num" NAs. Set to 0 to do unimputed training
+num <- 3
+train <- train[(rowSums(is.na(train)) <= num),]
+if(num != 0){
+  set.seed(107)
+  train <- rfImpute(disorder.30day~., data = train) #Impute missing values
+}
+
+testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
+
+# [1] "Training Error"
+# [1] 0.401
+# [1] "Testing Error"
+# [1] 0.109
+# [1] "Testing Sensitivity"
+# [1] 0.667
+# [1] "Testing Specificity"
+# [1] 0.907
+# Optimal num: 3
+# Optimal threshold: 0.48
+```
+
+```{r lassoSetup: goodVars preimputed, eval = T}
+train <- readRDS("data/30dayTrain_imputed.Rda")
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+
+testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+
+# Training Error: 0.42
+# Testing Error: 0.0466
+# Testing Sensitivity: 0.167
+# Testing Specificity: 0.966
+# Optimal Threshold: 0.38
+```
+
+```{r lassoSetup: goodVars postimputed/unimputed, eval = T}
+train <- readRDS("data/30dayTrain_unimputed.Rda")
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+num <- 2 #Remove all rows with more "num" NAs. Set to 0 to do unimputed training
+train <- train[(rowSums(is.na(train)) <= num),]
+set.seed(108)
+if(num != 0){
+  train <- rfImpute(disorder.30day~., data = train)
+}
+
+testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+
+# Optimal num: 0 (Unimputed)
+# Training Error: 43%
+# Testing Error: 0.0618 
+# Sensitivity: 0.128  
+# Specificity: 0.968
+# Optimal Threshold: 0.38
+```
+
+```{r lasso body, eval = T}
+#Pairwise plot of numeric features. Testing for collinearity. Active only for allVars
+# pairs.panels(train[c(-1, -2, -3, -4, -5, -6, -10)])
+
+#Form balanced training data
+train.endorsed <- train[train$disorder.30day == "1",]
+train.notEndorsed <- train[train$disorder.30day == "0",]
+prob <- nrow(train.endorsed)/nrow(train.notEndorsed)
+set.seed(109)
+ind <- sample(2, nrow(train.notEndorsed), replace = T, prob = c(prob, 1-prob))
+train.notEndorsed <- train.notEndorsed[ind == 1,]
+train.balanced <- rbind(train.notEndorsed, train.endorsed)
+
+# Specify vars - allVars: 1, goodVars: 4
+varType <- 1 #######################################################################MODIFY!
+
+#Isolate target
+ytrain <- train.balanced[, varType]
+#Isolate features
+xtrain <- model.matrix(disorder.30day~., data = train.balanced)[, -varType]
+
+#Try different lambda values
+set.seed(110)
+CV = cv.glmnet(x = xtrain, y = ytrain, family = "binomial", type.measure = "class", nfolds = 5, alpha = 1, nlambda = 100)
+#Train lasso using previously identified optimal lambda
+set.seed(111)
+lasso.fit <- glmnet(x = xtrain, y = ytrain, family = "binomial", nfolds = 5, alpha = 1, lambda = CV$lambda.min)
+
+#Plot Cross Validation for visualization
+plot(CV)
+
+lasso.fit.pred <- predict(lasso.fit, model.matrix(disorder.30day~., data = train.balanced)[, -1], type = "class")
+predictions <- as.data.frame(lasso.fit.pred) %>% rename("predicted" = s0)
+actual <- as.data.frame(train.balanced$disorder.30day) %>% rename("actual" = 'train.balanced$disorder.30day')
+confusionMatrix <- as.data.frame(table(cbind(actual, predictions)))
+oobError <- 1 - sum(confusionMatrix[confusionMatrix$actual == confusionMatrix$predicted, confusionMatrix$actual == confusionMatrix$predicted]$Freq) /
+  sum(confusionMatrix$Freq)
+###OOB ERROR
+print("Training Error")
+oobError
+
+#Use lasso to predict target using features from testOne
+toTest <- testOne ######################################################################################################MODIFY!
+features <- model.matrix(disorder.30day~., data = toTest)[, -varType]
+lasso.fit.pred <- predict(lasso.fit, features, type = "response")
+
+#Visualize logistic regression probabilities
+plot(lasso.fit.pred)
+
+#Tuning
+thresholdTests <- data.frame(matrix(0, nrow = 4, ncol = 100))
+row.names(thresholdTests) <- c("threshold", "accuracy", "sensitivity", "specificity")
+
+for(i in as.integer(100*min(lasso.fit.pred)+1):as.integer(100*max(lasso.fit.pred)-1))
+{
+  threshold <- i/100
+  lasso.fit.testPred <- ifelse(lasso.fit.pred > threshold, "0", "1")
+  predictions <- as.data.frame(lasso.fit.testPred) %>% rename("predicted" = s0)
+  actual <- as.data.frame(toTest$disorder.30day) %>% rename("actual" = 'toTest$disorder.30day')
+  confusionMatrix <- as.data.frame(table(cbind(actual, predictions)))
+  thresholdTests[1,i] <- threshold
+  thresholdTests[2,i] <- sum(confusionMatrix[confusionMatrix$actual == confusionMatrix$predicted, confusionMatrix$actual == confusionMatrix$predicted]$Freq) /
+    sum(confusionMatrix$Freq)
+  thresholdTests[3,i] <- confusionMatrix[confusionMatrix$actual == 1 & confusionMatrix$predicted == 1,]$Freq /
+    sum(confusionMatrix[confusionMatrix$predicted == 1,]$Freq)
+  thresholdTests[4,i] <- confusionMatrix[confusionMatrix$actual == 0 & confusionMatrix$predicted == 0,]$Freq /
+    sum(confusionMatrix[confusionMatrix$predicted == 0,]$Freq)
+}
+
+length <- as.integer(100*max(lasso.fit.pred)-1) - as.integer(100*min(lasso.fit.pred)+1) + 1
+thresholdVec <- rep(0, length)
+accuracyVec <- rep(0, length)
+sensitivityVec <- rep(0, length)
+specificityVec <- rep(0, length)
+for(i in 1:length)
+{
+  thresholdVec[i] <- thresholdTests[1,i+as.integer(100*min(lasso.fit.pred)+1)-2]
+  accuracyVec[i] <- thresholdTests[2,i+as.integer(100*min(lasso.fit.pred)+1)-2]
+  sensitivityVec[i] <- thresholdTests[3,i+as.integer(100*min(lasso.fit.pred)+1)-2]
+  specificityVec[i] <- thresholdTests[4,i+as.integer(100*min(lasso.fit.pred)+1)-2]
+}
+
+threshold.dat <- data.frame("threshold" = thresholdVec, "accuracy" = accuracyVec, "sensitivity" = sensitivityVec, "specificity" = specificityVec)
+
+thresholds.graph <- plot_ly(threshold.dat, x = ~threshold, y = ~accuracy, type = 'scatter', mode = 'lines', name = "accuracy") %>% 
+  add_trace(x = ~threshold, y = ~sensitivity, type = 'scatter', mode = 'lines', name = "sensitivity") %>%
+  add_trace(x = ~threshold, y = ~specificity, type = 'scatter', mode = 'lines', name = "specificity") %>%
+  layout(title = "testOne accuracy measures vs threshold", xaxis = list(title = "threshold"), yaxis = list(title = "accuracy"))
+thresholds.graph
+
+#Note: Lasso appears to be calculating probability for not endorsed
+lasso.fit.pred <- ifelse(lasso.fit.pred > 0.48, "0", "1") ##########################################################################MODIFY!
+plot(lasso.fit.pred)
+
+predictions <- as.data.frame(lasso.fit.pred) %>% rename("predicted" = s0)
+actual <- as.data.frame(toTest$disorder.30day) %>% rename("actual" = 'toTest$disorder.30day')
+confusionMatrix <- as.data.frame(table(cbind(actual, predictions)))
+mce <- 1 - sum(confusionMatrix[confusionMatrix$actual == confusionMatrix$predicted, confusionMatrix$actual == confusionMatrix$predicted]$Freq) /
+  sum(confusionMatrix$Freq)
+sensitivity <- confusionMatrix[confusionMatrix$actual == 1 & confusionMatrix$predicted == 1,]$Freq / 
+  sum(confusionMatrix[confusionMatrix$predicted == 1,]$Freq)
+specificity <- confusionMatrix[confusionMatrix$actual == 0 & confusionMatrix$predicted == 0,]$Freq / 
+  sum(confusionMatrix[confusionMatrix$predicted == 0,]$Freq)
+
+print("Testing Error")
+mce
+print("Testing Sensitivity")
+sensitivity
+print("Testing Specificity")
+specificity
+lasso.fit$beta
+```
+
+The optimal algorithm was our LASSO trained on a allVars postimputed training set, where initial NAs allowed per row was set to 3 and threshold was set to 0.48: MCE = 0.109, Sensitivity = 0.667, Specificity = 0.907. difficultyUnderstandingSituation, socialLifeDifficulty, and healthWorkAbsence had non-zero coefficients in the model
+
+<h2>boosting</h2>
+```{r boosting 30day, eval = T}
+
+```
+
+<h2>deep learning</h2>
+```{r deep learning 30day, eval = T}
+
+```
+
+<h2>k nearest neighbor</h2>
+```{r k nearest neighbor, eval = T}
+
+```
+
+<h2>naive bayes</h2>
+```{r naive bayes, eval = T}
+
+```
 
 <h1>Variable Documentation (TODO)</h1>
-
-CASEID                                    
-employment.current [Cat][1: Employed, 2: Unemployed, 3: Not In Labor Force] - Work status of respondent at time of interview                    
-seriousSuicideThoughts [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
-suicideAttempt.num [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously
-seriousSuicideThoughts.12month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
-physicalHealth.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
-healthWorkAbsence.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
-difficultyConcentrating.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
-difficultyUnderstandingSituation.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
-difficutlyRemembering.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
-daysMobilityDifficult.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-socialLifeDifficulty.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
-afterLiquidationAndDebts.balance [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously          
-finances.numberPplSupportingHousehold [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously     
-financialNeedsMet [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
-monthlyBillDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
-insuffFoodMoney.prevYear [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-spouse.tooMuchAlcoholDrugs [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
-spouse.jobDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
-freqTalkWithRelatives [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
-freqArgueWithRelatives [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
-freqFriendInteraction [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
-freqTransparentPersonalProblems [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously          
-homeless.historical [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
-relativeWellOffRank.usPop [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
-relativeWellOffRank.local [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
-neighborhood.trustworthy [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-neighborhood.nightSafety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-family.respectEachother [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
-proudOfFamily [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
-family.enjoyTogetherFreeTime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
-family.closenessHindersPersonalGoals [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously      
-family.argueCustoms [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
-lessRespect.freq [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
-nameCalled.freq [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
-dislikedForRace [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
-sex [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                      
-age [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                      
-region [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                   
-depresDis.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
-depresDis.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
-depresDis.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-panicAtk.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
-panicAtk.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
-panicDis.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
-anxiety.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
-depresDis.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-anxiety.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
-panicAtk.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
-maritalStatus [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
-yearsOfEducation [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
-depresEp.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-depresEp.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
-depresEp.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-panicAtk.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
-panicDis.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
-panicDis.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
-anxiety.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
-conductDisorder.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
-conductDisorder.recency [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-depresEp.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-panicDis.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                         
-depresEp.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
-anxiety.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
-panicAtk.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
-panicDis.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
-weightClass [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                              
-height.inches [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                            
-religiousAttendance.freq [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-wksUnemployed.12month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
-anxiety.onset [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                          
-timesMarried [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                             
-marriage.divorceAnnulmentCount [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
-livingChildren [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
-schoolingCompleted.respondent [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
-race [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                                     
-householdIncome [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                   
-workHrs.week [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                             
-personality.transparentFeelings [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously          
-personality.indecisiveAbtSelfPath [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
-personality.feelBadWhenHurtAnother [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
-personality.willLieToAchieveGoal [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
-personality.takeRiskyChances [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
-personality.argueWhenStopped [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
-personality.letOthersMakeBigDecisions [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
-personality.dislikeAlone [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-personality.askAdviceAbtEverydayDecisions [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously
-personality.sociallyAwkward [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
-personality.easyToGetCloseToOthers [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously     
-cigsPerDay [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                               
-gamble.totalCount [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
-gamble.ageFirstExposure [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
-conductDisorder.lifetime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-conductDisorder.12Month [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-depresDis.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-daysOvertime.30day [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
-spouse.financeDisagreement [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
-spouse.lifePhilosophyDisagreement [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously       
-spouse.majorDecisionDisagreement [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously         
-spouse.quarrel [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
-marriage.regretMarriage [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-motherAlive [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                              
-motherDeath.respondentAge [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
-fatherAlive [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                             
-fatherDeath.respondentAge [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
-highschool.numAttended [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-districtHadMiddleSchool [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-gradeschool.relativeAge [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-religiousImportance.childhood [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously           
-awayHome.childhood [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                       
-familyHeadWorkTime.male [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-familyHeadWorkTime.female [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
-govAssist.childhood [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
-neglect.dangerousChores [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-neglect.insuffSupervision [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
-neglect.parentSpendOnSelf [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
-neglect.hunger [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                           
-neglect.insuffMedical [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-femaleCaretaker.closeness [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously               
-femaleCaretaker.strictRules [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
-femaleCaretaker.depression [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously              
-femaleCaretaker.depression.hospitalized [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
-femaleCaretaker.anxiety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                  
-femaleCaretaker.employmentDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
-femaleCaretaker.physicalFights [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously            
-femaleCaretaker.crime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
-femaleCaretaker.suicideAttempt [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously         
-maleCaretaker.closeness [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
-maleCaretaker.strictRules [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                
-maleCaretaker.depression [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-maleCaretaker.depression.hospitalized [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously   
-maleCaretaker.anxiety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
-maleCaretaker.employmentDifficulty [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously     
-maleCaretaker.physicalFights [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
-maleCaretaker.crime [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                      
-maleCaretaker.suicideAttempt [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously             
-closeFamily.alive [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                        
-closeRelative.cancer [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                     
-closeRelative.seriousHeartProblem [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously      
-closeRelative.seriousMemoryProblem [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously        
-closeRelative.depression [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                 
-closeRelative.anxiety [Cat][1: Yes, 2: No, -8: Don't Know, -9: Refused] - Whether or not respondent ever considered suicide seriously                    
-Parents.USBorn                           
-yearsOfEducation.father                  
-yearsOfEducation.mother                  
-employment.initialAge                    
-jobPerformance.30day
-
 
 Sources:
 https://www.icpsr.umich.edu/web/ICPSR/studies/20240/summary (Publicly Available Dataset Download)
 https://www.icpsr.umich.edu/web/DSDR/search/variables?q=yescount&STUDYQ=20240 (Variable Documentation)
+
+&nbsp;
+<hr />
+<p style="text-align: center;">Alexander Chen</p>
+<p style="text-align: center;">With A Very Special Thanks To Prof. Linda Zhao</p>
+<p style="text-align: center;"><span style="color: #808080;"><em>alchen22@mlschools.org</em></span></p>
+&nbsp;

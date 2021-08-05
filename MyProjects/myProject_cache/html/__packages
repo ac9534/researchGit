@@ -1,0 +1,16 @@
+base
+pacman
+ggplot2
+dplyr
+tidyverse
+tibble
+tidyr
+readr
+purrr
+stringr
+forcats
+ggrepel
+plotly
+skimr
+stargazer
+contrast
