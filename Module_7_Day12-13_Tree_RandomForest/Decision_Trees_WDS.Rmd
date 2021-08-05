@@ -629,7 +629,7 @@ text(fit1.single.full, pretty=0)
 
 \framesubtitle{Build final tree:}
 \tiny
-```{r results=TRUE}
+```{r results=TRUE, eval = F}
 fit1.single.full
 ```
 
@@ -1105,11 +1105,8 @@ fit.rf.final <- randomForest(LogSalary~., data1, mtry=6, ntree=250)
 plot(fit.rf.final)
 ```
 
-
-
 ---
 \frametitle{Tuning `ntree` and `mtry}
-
 
 **Remark:**
 
