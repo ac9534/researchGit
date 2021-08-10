@@ -18,11 +18,11 @@ options(scipen = 0, digits = 3)
 
 #Load required packages
 if(!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate, plyr, randomForest, caret, psych, rpart, rpart.plot,
+pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate, plyr, randomForest, caret, psych, rpart, rpart.plot, xgboost,
                plotROC, usmap, glmnet, plotly, haven, magrittr, Stat2Data, skimr, GGally, rmdformats, prettydoc)
 ```
 
-```{r initial load, eval = F}
+```{r Initial: Load, eval = F}
 cpes.raw <- as.data.frame(read_sav("data/20240-0001-Data.sav"))
 if (file.exists("data/cpes.Rda")) {
   file.remove("data/cpes.Rda")
@@ -37,7 +37,7 @@ blablabla
 
 <h2>Naming & Classification</h2>
 
-```{r dataclean: naming, eval = T}
+```{r Dataclean: Naming, eval = T}
 cpes.raw <- readRDS("data/cpes.Rda")
 cpes.cleaned <- cpes.raw %>% rename(
   "sex" = "V09036",
@@ -181,11 +181,11 @@ cpes.cleaned <- cpes.raw %>% rename(
   "freqTransparentPersonalProblems" = "V05513",
   
   ##DX: Major Depressive Disorder
-  "disorder.lifetime" = "V07876",
-  "disorder.12Month" = "V07655",
-  "disorder.30day" = "V07657",
-  "disorder.onset" = "V08766",
-  "disorder.recency" = "V08768"
+  "depression.lifetime" = "V07876",
+  "depression.12Month" = "V07655",
+  "depression.30day" = "V07657",
+  "depression.onset" = "V08766",
+  "depression.recency" = "V08768"
 )
 ```
 
@@ -195,6 +195,7 @@ Additionally, categorical and continuous variables were converted to factors and
 
 Categorical variables and continuous variables are listed below:<br>
 
+##Var List##
 **Categorical (Refer to Appendix for Detailed Breakdown of Variable Categories):**<br>
 Current Employment Status (Time of Survey)<br>
 Marital Status (Time of Survey)<br>
@@ -309,118 +310,111 @@ Alive Close Family<br>
 Father Years of Education<br>
 Mother Years of Education<br>
 Age First Employed<br>
+##Var List End##
 
 <h2> Factoring and Subsetting </h2>
 
-```{r dataclean: factoring and subsetting, eval = T}
-cpes.cleaned <- cpes.cleaned %>% select(-starts_with("V") & -starts_with("NC") & -starts_with("NS") & -starts_with("NL") & -starts_with("CPES") & -c("SESTRAT", "SECLUSTR"))
-
-####convert appropriate variables to factor####
+```{r Dataclean: Factoring, eval = T}
+#Convert appropriate variables to factor
 cpes.cleaned %<>% mutate_at(
-  c("sex", "region", "maritalStatus","weightClass", "race", "employment.current", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day", "socialLifeDifficulty.30day", "afterLiquidationAndDebts.balance", "spouse.tooMuchAlcoholDrugs", "financialNeedsMet","monthlyBillDifficulty","insuffFoodMoney.prevYear", "spouse.jobDifficulty", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems", "homeless.historical", "neighborhood.trustworthy", "neighborhood.nightSafety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms", "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "religiousAttendance.freq", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel", "marriage.regretMarriage", "personality.easyToGetCloseToOthers", "motherAlive", "fatherAlive", "districtHadMiddleSchool", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.dangerousChores", "neglect.insuffSupervision", "neglect.parentSpendOnSelf", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.depression.hospitalized", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "disorder.30day" ,"disorder.12Month" ,"disorder.lifetime"), as.factor)
+  c("sex", "region", "maritalStatus","weightClass", "race", "employment.current", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day", "socialLifeDifficulty.30day", "afterLiquidationAndDebts.balance", "spouse.tooMuchAlcoholDrugs", "financialNeedsMet","monthlyBillDifficulty","insuffFoodMoney.prevYear", "spouse.jobDifficulty", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems", "homeless.historical", "neighborhood.trustworthy", "neighborhood.nightSafety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms", "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "religiousAttendance.freq", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel", "marriage.regretMarriage", "personality.easyToGetCloseToOthers", "motherAlive", "fatherAlive", "districtHadMiddleSchool", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.dangerousChores", "neglect.insuffSupervision", "neglect.parentSpendOnSelf", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.depression.hospitalized", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "depression.30day" ,"depression.12Month" ,"depression.lifetime"), as.factor)
 
-####convert appropriate variables to numeric####
+#Convert appropriate variables to numeric
 cpes.cleaned %<>% mutate_at(
-  c("age", "height.inches","householdIncome","timesMarried", "finances.numberPplSupportingHousehold", "wksUnemployed.12month", "marriage.divorceAnnulmentCount", "yearsOfEducation.respondent", "workHrs.week","cigsPerDay","gamble.totalCount", "gamble.ageFirstExposure", "daysOvertime.30day", "motherDeath.respondentAge", "fatherDeath.respondentAge","highschool.numAttended", "closeFamily.alive", "parents.USBorn", "yearsOfEducation.father","yearsOfEducation.mother","employment.initialAge", "jobPerformance.30day", "disorder.recency","disorder.onset", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "relativeWellOffRank.usPop", "relativeWellOffRank.local"), as.numeric)
+  c("age", "height.inches","householdIncome","timesMarried", "finances.numberPplSupportingHousehold", "wksUnemployed.12month", "marriage.divorceAnnulmentCount", "yearsOfEducation.respondent", "workHrs.week","cigsPerDay","gamble.totalCount", "gamble.ageFirstExposure", "daysOvertime.30day", "motherDeath.respondentAge", "fatherDeath.respondentAge","highschool.numAttended", "closeFamily.alive", "parents.USBorn", "yearsOfEducation.father","yearsOfEducation.mother","employment.initialAge", "jobPerformance.30day", "depression.recency","depression.onset", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "relativeWellOffRank.usPop", "relativeWellOffRank.local"), as.numeric)
+```
 
-#####cat####
-cat <- cpes.cleaned[,names(cpes.cleaned)=="CASEID" | sapply(cpes.cleaned, is.factor)]
-cat <- select(cat, -c("disorder.lifetime", "disorder.12Month", "disorder.30day"))
-cat$employment.current <- recode_factor(cat$employment.current, '1' = "Employed", '2' = "Unemployed", '3' = "Not In Labor Force")
-cat$physicalHealth.30day <- recode_factor(cat$physicalHealth.30day, '1' = "Better", '2' = "Worse", '3' = "About The Same")
-cat$homeless.historical <- recode_factor(cat$homeless.historical, '1' = "Yes", '5' = "No")
-cat$difficultyConcentrating.30day <- recode_factor(cat$difficultyConcentrating.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
-cat$difficultyUnderstandingSituation.30day <- recode_factor(cat$difficultyUnderstandingSituation.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
-cat$difficutlyRemembering.30day <- recode_factor(cat$difficutlyRemembering.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
-cat$socialLifeDifficulty.30day <- recode_factor(cat$socialLifeDifficulty.30day, '1' = "Yes", '5' = "No")
-cat$afterLiquidationAndDebts.balance <- recode_factor(cat$afterLiquidationAndDebts.balance, '1' = "Money Left", '2' = "Owe Money", '3' = "Debts Equal Assets", '4' = "Don't Owe Anything")
-cat$financialNeedsMet <- recode_factor(cat$financialNeedsMet, '1' = "More Than Need", '2' = "Just Enough", '3' = "Not Enough")
-cat$monthlyBillDifficulty <- recode_factor(cat$monthlyBillDifficulty, '1' = "Very Difficult", '2' = "Somewhat Difficult", '3' = "Not Very Difficult", '4' = "Not At All Difficult")
-cat$insuffFoodMoney.prevYear <- recode_factor(cat$insuffFoodMoney.prevYear, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$spouse.tooMuchAlcoholDrugs <- recode_factor(cat$spouse.tooMuchAlcoholDrugs, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$spouse.jobDifficulty <- recode_factor(cat$spouse.jobDifficulty, '1' = "Yes", '5' = "No", '7' = "Does Not Apply/Spouse Never Worked")
-cat$freqTalkWithRelatives <- recode_factor(cat$freqTalkWithRelatives, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
-cat$freqArgueWithRelatives <- recode_factor(cat$freqArgueWithRelatives, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$freqFriendInteraction <- recode_factor(cat$freqFriendInteraction, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
-cat$freqTransparentPersonalProblems <- recode_factor(cat$freqTransparentPersonalProblems, '1' = "Always", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
-cat$freqTransparentPersonalProblems <- recode_factor(cat$freqTransparentPersonalProblems, '1' = "Yes", '2' = "No")
-cat$neighborhood.trustworthy <- recode_factor(cat$neighborhood.trustworthy, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
-cat$neighborhood.nightSafety <- recode_factor(cat$neighborhood.nightSafety, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
-cat$family.respectEachother <- recode_factor(cat$family.respectEachother, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
-cat$proudOfFamily <- recode_factor(cat$proudOfFamily, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
-cat$family.enjoyTogetherFreeTime <- recode_factor(cat$family.enjoyTogetherFreeTime, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
-cat$family.closenessHindersPersonalGoals <- recode_factor(cat$family.closenessHindersPersonalGoals, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
-cat$family.argueCustoms <- recode_factor(cat$family.argueCustoms, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
-cat$lessRespect.freq <- recode_factor(cat$lessRespect.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
-cat$nameCalled.freq <- recode_factor(cat$nameCalled.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
-cat$dislikedForRace <- recode_factor(cat$dislikedForRace, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$sex <- recode_factor(cat$sex, '1' = "Male", '2' = "Female")
-cat$region <- recode_factor(cat$region, '1' = "Northeast", '2' = "Midwest", '3' = "South", '4' = "West")
-cat$maritalStatus <- recode_factor(cat$maritalStatus, '1' = "Married/Cohabiting", '2' = "Divorced/Separated/Widowed", '3' = "Never Married")
-cat$religiousAttendance.freq <- recode_factor(cat$religiousAttendance.freq, '1' = "More Than Once A Week", '2' = "About Once A Week", '3' = "One To Three Times A Month", '4' = "Less Than Once A Month", '5' = "Never")
-cat$weightClass <- recode_factor(cat$weightClass, '1' = "Underweight", '2' = "Healthy", '3' = "Overweight", '4' = "Obesity Class 1", '5' = "Obesity Class 2", '5' = "Obesity Class 3")
-cat$race <- recode_factor(cat$race, '1' = "Vietnamese", '2' = "Filipino", '3' = "Chinese", '4' = "All Other Asian", '5' = "Cuban", '6' = "PuertoRican", '7' = "Mexican", '8' = "All Other Hispanic", '9' = "Afro-Carribean", '10' = "African American", '11' = "Non-Hispanic Whites", '12' = "All Other")
-cat$personality.transparentFeelings <- recode_factor(cat$personality.transparentFeelings, '1' = "TRUE", '5' = "FALSE")
-cat$personality.indecisiveAbtSelfPath <- recode_factor(cat$personality.indecisiveAbtSelfPath, '1' = "TRUE", '5' = "FALSE")
-cat$personality.feelBadWhenHurtAnother <- recode_factor(cat$personality.feelBadWhenHurtAnother, '1' = "TRUE", '5' = "FALSE")
-cat$personality.willLieToAchieveGoal <- recode_factor(cat$personality.willLieToAchieveGoal, '1' = "TRUE", '5' = "FALSE")
-cat$personality.takeRiskyChances <- recode_factor(cat$personality.takeRiskyChances, '1' = "TRUE", '5' = "FALSE")
-cat$personality.letOthersMakeBigDecisions <- recode_factor(cat$personality.letOthersMakeBigDecisions, '1' = "TRUE", '5' = "FALSE")
-cat$personality.argueWhenStopped <- recode_factor(cat$personality.argueWhenStopped, '1' = "TRUE", '5' = "FALSE")
-cat$personality.dislikeAlone <- recode_factor(cat$personality.dislikeAlone, '1' = "TRUE", '5' = "FALSE")
-cat$personality.askAdviceAbtEverydayDecisions <- recode_factor(cat$personality.askAdviceAbtEverydayDecisions, '1' = "TRUE", '5' = "FALSE")
-cat$personality.sociallyAwkward <- recode_factor(cat$personality.sociallyAwkward, '1' = "TRUE", '5' = "FALSE")
-cat$personality.preferSoloActivities <- recode_factor(cat$personality.preferSoloActivities, '1' = "TRUE", '5' = "FALSE")
-cat$spouse.financeDisagreement <- recode_factor(cat$spouse.financeDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
-cat$spouse.lifePhilosophyDisagreement <- recode_factor(cat$spouse.lifePhilosophyDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
-cat$spouse.quarrel <- recode_factor(cat$spouse.quarrel, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
-cat$spouse.majorDecisionDisagreement <- recode_factor(cat$spouse.majorDecisionDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
-cat$marriage.regretMarriage <- recode_factor(cat$marriage.regretMarriage, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
-cat$personality.easyToGetCloseToOthers <- recode_factor(cat$personality.easyToGetCloseToOthers,  '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
-cat$motherAlive <- recode_factor(cat$motherAlive, '1' = "Yes", '5' = "No")
-cat$fatherAlive <- recode_factor(cat$fatherAlive, '1' = "Yes", '5' = "No")
-cat$gradeSchool.relativeAge <- recode_factor(cat$gradeSchool.relativeAge, '1' = "Younger", '2' = "Older", '3' = "Average", '4' = "Varied")
-cat$districtHadMiddleSchool <- recode_factor(cat$districtHadMiddleSchool, '1' = "Yes", '5' = "No")
-cat$religiousImportance.childhood <- recode_factor(cat$religiousImportance.childhood, '1' = "Very Important", '2' = "Somewhat Important", '3' = "Not Very Important", '4' = "Not At All Important")
-cat$familyHeadWorkTime.female <- recode_factor(cat$familyHeadWorkTime.female, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
-cat$familyHeadWorkTime.male <- recode_factor(cat$familyHeadWorkTime.male, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
-cat$neglect.insuffSupervision <- recode_factor(cat$neglect.insuffSupervision, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$neglect.parentSpendOnSelf <- recode_factor(cat$neglect.parentSpendOnSelf, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$neglect.dangerousChores <- recode_factor(cat$neglect.dangerousChores, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$neglect.hunger <- recode_factor(cat$neglect.hunger, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$neglect.insuffMedical <- recode_factor(cat$neglect.insuffMedical, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
-cat$femaleCaretaker.closeness <- recode_factor(cat$femaleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
-cat$femaleCaretaker.strictRules <- recode_factor(cat$femaleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
-cat$femaleCaretaker.depression.hospitalized <- recode_factor(cat$femaleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
-cat$femaleCaretaker.depression <- recode_factor(cat$femaleCaretaker.depression, '1' = "Yes", '5' = "No")
-cat$femaleCaretaker.anxiety <- recode_factor(cat$femaleCaretaker.anxiety, '1' = "Yes", '5' = "No")
-cat$femaleCaretaker.physicalFights <- recode_factor(cat$femaleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
-cat$femaleCaretaker.crime <- recode_factor(cat$femaleCaretaker.crime, '1' = "Yes", '5' = "No")
-cat$femaleCaretaker.employmentDifficulty <- recode_factor(cat$femaleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.closeness <- recode_factor(cat$maleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
-cat$femaleCaretaker.suicideAttempt <- recode_factor(cat$femaleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.strictRules <- recode_factor(cat$maleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
-cat$maleCaretaker.depression.hospitalized <- recode_factor(cat$maleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.depression <- recode_factor(cat$maleCaretaker.depression, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.anxiety <- recode_factor(cat$maleCaretaker.anxiety, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.employmentDifficulty <- recode_factor(cat$maleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.physicalFights <- recode_factor(cat$maleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.crime <- recode_factor(cat$maleCaretaker.crime, '1' = "Yes", '5' = "No")
-cat$maleCaretaker.suicideAttempt <- recode_factor(cat$maleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
-cat$closeRelative.cancer <- recode_factor(cat$closeRelative.cancer, '1' = "Yes", '5' = "No")
-cat$closeRelative.seriousHeartProblem <- recode_factor(cat$closeRelative.seriousHeartProblem, '1' = "Yes", '5' = "No")
-cat$closeRelative.seriousMemoryProblem <- recode_factor(cat$closeRelative.seriousMemoryProblem, '1' = "Yes", '5' = "No")
-cat$closeRelative.depression <- recode_factor(cat$closeRelative.depression, '1' = "Yes", '5' = "No")
-cat$closeRelative.anxiety <- recode_factor(cat$closeRelative.anxiety, '1' = "Yes", '5' = "No")
+```{r factor level naming, eval = F}
+cpes.cleaned$employment.current <- recode_factor(cpes.cleaned$employment.current, '1' = "Employed", '2' = "Unemployed", '3' = "Not In Labor Force")
+cpes.cleaned$physicalHealth.30day <- recode_factor(cpes.cleaned$physicalHealth.30day, '1' = "Better", '2' = "Worse", '3' = "About The Same")
+cpes.cleaned$homeless.historical <- recode_factor(cpes.cleaned$homeless.historical, '1' = "Yes", '5' = "No")
+cpes.cleaned$difficultyConcentrating.30day <- recode_factor(cpes.cleaned$difficultyConcentrating.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cpes.cleaned$difficultyUnderstandingSituation.30day <- recode_factor(cpes.cleaned$difficultyUnderstandingSituation.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cpes.cleaned$difficutlyRemembering.30day <- recode_factor(cpes.cleaned$difficutlyRemembering.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cpes.cleaned$socialLifeDifficulty.30day <- recode_factor(cpes.cleaned$socialLifeDifficulty.30day, '1' = "Yes", '5' = "No")
+cpes.cleaned$afterLiquidationAndDebts.balance <- recode_factor(cpes.cleaned$afterLiquidationAndDebts.balance, '1' = "Money Left", '2' = "Owe Money", '3' = "Debts Equal Assets", '4' = "Don't Owe Anything")
+cpes.cleaned$financialNeedsMet <- recode_factor(cpes.cleaned$financialNeedsMet, '1' = "More Than Need", '2' = "Just Enough", '3' = "Not Enough")
+cpes.cleaned$monthlyBillDifficulty <- recode_factor(cpes.cleaned$monthlyBillDifficulty, '1' = "Very Difficult", '2' = "Somewhat Difficult", '3' = "Not Very Difficult", '4' = "Not At All Difficult")
+cpes.cleaned$insuffFoodMoney.prevYear <- recode_factor(cpes.cleaned$insuffFoodMoney.prevYear, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$spouse.tooMuchAlcoholDrugs <- recode_factor(cpes.cleaned$spouse.tooMuchAlcoholDrugs, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$spouse.jobDifficulty <- recode_factor(cpes.cleaned$spouse.jobDifficulty, '1' = "Yes", '5' = "No", '7' = "Does Not Apply/Spouse Never Worked")
+cpes.cleaned$freqTalkWithRelatives <- recode_factor(cpes.cleaned$freqTalkWithRelatives, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
+cpes.cleaned$freqArgueWithRelatives <- recode_factor(cpes.cleaned$freqArgueWithRelatives, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$freqFriendInteraction <- recode_factor(cpes.cleaned$freqFriendInteraction, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
+cpes.cleaned$freqTransparentPersonalProblems <- recode_factor(cpes.cleaned$freqTransparentPersonalProblems, '1' = "Always", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$freqTransparentPersonalProblems <- recode_factor(cpes.cleaned$freqTransparentPersonalProblems, '1' = "Yes", '2' = "No")
+cpes.cleaned$neighborhood.trustworthy <- recode_factor(cpes.cleaned$neighborhood.trustworthy, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
+cpes.cleaned$neighborhood.nightSafety <- recode_factor(cpes.cleaned$neighborhood.nightSafety, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
+cpes.cleaned$family.respectEachother <- recode_factor(cpes.cleaned$family.respectEachother, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$proudOfFamily <- recode_factor(cpes.cleaned$proudOfFamily, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$family.enjoyTogetherFreeTime <- recode_factor(cpes.cleaned$family.enjoyTogetherFreeTime, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$family.closenessHindersPersonalGoals <- recode_factor(cpes.cleaned$family.closenessHindersPersonalGoals, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
+cpes.cleaned$family.argueCustoms <- recode_factor(cpes.cleaned$family.argueCustoms, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
+cpes.cleaned$lessRespect.freq <- recode_factor(cpes.cleaned$lessRespect.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
+cpes.cleaned$nameCalled.freq <- recode_factor(cpes.cleaned$nameCalled.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
+cpes.cleaned$dislikedForRace <- recode_factor(cpes.cleaned$dislikedForRace, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$sex <- recode_factor(cpes.cleaned$sex, '1' = "Male", '2' = "Female")
+cpes.cleaned$region <- recode_factor(cpes.cleaned$region, '1' = "Northeast", '2' = "Midwest", '3' = "South", '4' = "West")
+cpes.cleaned$maritalStatus <- recode_factor(cpes.cleaned$maritalStatus, '1' = "Married/Cohabiting", '2' = "Divorced/Separated/Widowed", '3' = "Never Married")
+cpes.cleaned$religiousAttendance.freq <- recode_factor(cpes.cleaned$religiousAttendance.freq, '1' = "More Than Once A Week", '2' = "About Once A Week", '3' = "One To Three Times A Month", '4' = "Less Than Once A Month", '5' = "Never")
+cpes.cleaned$weightClass <- recode_factor(cpes.cleaned$weightClass, '1' = "Underweight", '2' = "Healthy", '3' = "Overweight", '4' = "Obesity Class 1", '5' = "Obesity Class 2", '5' = "Obesity Class 3")
+cpes.cleaned$race <- recode_factor(cpes.cleaned$race, '1' = "Vietnamese", '2' = "Filipino", '3' = "Chinese", '4' = "All Other Asian", '5' = "Cuban", '6' = "PuertoRican", '7' = "Mexican", '8' = "All Other Hispanic", '9' = "Afro-Carribean", '10' = "African American", '11' = "Non-Hispanic Whites", '12' = "All Other")
+cpes.cleaned$personality.transparentFeelings <- recode_factor(cpes.cleaned$personality.transparentFeelings, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.indecisiveAbtSelfPath <- recode_factor(cpes.cleaned$personality.indecisiveAbtSelfPath, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.feelBadWhenHurtAnother <- recode_factor(cpes.cleaned$personality.feelBadWhenHurtAnother, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.willLieToAchieveGoal <- recode_factor(cpes.cleaned$personality.willLieToAchieveGoal, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.takeRiskyChances <- recode_factor(cpes.cleaned$personality.takeRiskyChances, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.letOthersMakeBigDecisions <- recode_factor(cpes.cleaned$personality.letOthersMakeBigDecisions, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.argueWhenStopped <- recode_factor(cpes.cleaned$personality.argueWhenStopped, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.dislikeAlone <- recode_factor(cpes.cleaned$personality.dislikeAlone, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.askAdviceAbtEverydayDecisions <- recode_factor(cpes.cleaned$personality.askAdviceAbtEverydayDecisions, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.sociallyAwkward <- recode_factor(cpes.cleaned$personality.sociallyAwkward, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.preferSoloActivities <- recode_factor(cpes.cleaned$personality.preferSoloActivities, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$spouse.financeDisagreement <- recode_factor(cpes.cleaned$spouse.financeDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$spouse.lifePhilosophyDisagreement <- recode_factor(cpes.cleaned$spouse.lifePhilosophyDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$spouse.quarrel <- recode_factor(cpes.cleaned$spouse.quarrel, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$spouse.majorDecisionDisagreement <- recode_factor(cpes.cleaned$spouse.majorDecisionDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$marriage.regretMarriage <- recode_factor(cpes.cleaned$marriage.regretMarriage, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$personality.easyToGetCloseToOthers <- recode_factor(cpes.cleaned$personality.easyToGetCloseToOthers,  '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$motherAlive <- recode_factor(cpes.cleaned$motherAlive, '1' = "Yes", '5' = "No")
+cpes.cleaned$fatherAlive <- recode_factor(cpes.cleaned$fatherAlive, '1' = "Yes", '5' = "No")
+cpes.cleaned$gradeSchool.relativeAge <- recode_factor(cpes.cleaned$gradeSchool.relativeAge, '1' = "Younger", '2' = "Older", '3' = "Average", '4' = "Varied")
+cpes.cleaned$districtHadMiddleSchool <- recode_factor(cpes.cleaned$districtHadMiddleSchool, '1' = "Yes", '5' = "No")
+cpes.cleaned$religiousImportance.childhood <- recode_factor(cpes.cleaned$religiousImportance.childhood, '1' = "Very Important", '2' = "Somewhat Important", '3' = "Not Very Important", '4' = "Not At All Important")
+cpes.cleaned$familyHeadWorkTime.female <- recode_factor(cpes.cleaned$familyHeadWorkTime.female, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
+cpes.cleaned$familyHeadWorkTime.male <- recode_factor(cpes.cleaned$familyHeadWorkTime.male, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
+cpes.cleaned$neglect.insuffSupervision <- recode_factor(cpes.cleaned$neglect.insuffSupervision, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.parentSpendOnSelf <- recode_factor(cpes.cleaned$neglect.parentSpendOnSelf, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.dangerousChores <- recode_factor(cpes.cleaned$neglect.dangerousChores, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.hunger <- recode_factor(cpes.cleaned$neglect.hunger, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.insuffMedical <- recode_factor(cpes.cleaned$neglect.insuffMedical, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$femaleCaretaker.closeness <- recode_factor(cpes.cleaned$femaleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
+cpes.cleaned$femaleCaretaker.strictRules <- recode_factor(cpes.cleaned$femaleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
+cpes.cleaned$femaleCaretaker.depression.hospitalized <- recode_factor(cpes.cleaned$femaleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.depression <- recode_factor(cpes.cleaned$femaleCaretaker.depression, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.anxiety <- recode_factor(cpes.cleaned$femaleCaretaker.anxiety, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.physicalFights <- recode_factor(cpes.cleaned$femaleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.crime <- recode_factor(cpes.cleaned$femaleCaretaker.crime, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.employmentDifficulty <- recode_factor(cpes.cleaned$femaleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.closeness <- recode_factor(cpes.cleaned$maleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
+cpes.cleaned$femaleCaretaker.suicideAttempt <- recode_factor(cpes.cleaned$femaleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.strictRules <- recode_factor(cpes.cleaned$maleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
+cpes.cleaned$maleCaretaker.depression.hospitalized <- recode_factor(cpes.cleaned$maleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.depression <- recode_factor(cpes.cleaned$maleCaretaker.depression, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.anxiety <- recode_factor(cpes.cleaned$maleCaretaker.anxiety, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.employmentDifficulty <- recode_factor(cpes.cleaned$maleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.physicalFights <- recode_factor(cpes.cleaned$maleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.crime <- recode_factor(cpes.cleaned$maleCaretaker.crime, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.suicideAttempt <- recode_factor(cpes.cleaned$maleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.cancer <- recode_factor(cpes.cleaned$closeRelative.cancer, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.seriousHeartProblem <- recode_factor(cpes.cleaned$closeRelative.seriousHeartProblem, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.seriousMemoryProblem <- recode_factor(cpes.cleaned$closeRelative.seriousMemoryProblem, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.depression <- recode_factor(cpes.cleaned$closeRelative.depression, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.anxiety <- recode_factor(cpes.cleaned$closeRelative.anxiety, '1' = "Yes", '5' = "No")
 
-####cont#####
-cont <- cpes.cleaned[,names(cpes.cleaned)=="CASEID" | sapply(cpes.cleaned, is.numeric)]
-cont <- select(cont, -c("disorder.onset", "disorder.recency"))
-
-disorder <- select(cpes.cleaned, c("CASEID", "disorder.lifetime", "disorder.12Month", "disorder.30day", "disorder.onset", "disorder.recency"))
-disorder$disorder.lifetime <- recode_factor(disorder$disorder.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
-disorder$disorder.12Month <- recode_factor(disorder$disorder.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
-disorder$disorder.30day <- recode_factor(disorder$disorder.30day, '1' = "Endorsed", '5' = "Not Endorsed")
+cpes.cleaned$depression.lifetime <- recode_factor(depression$depression.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
+cpes.cleaned$depression.12Month <- recode_factor(depression$depression.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
+cpes.cleaned$depression.30day <- recode_factor(depression$depression.30day, '1' = "Endorsed", '5' = "Not Endorsed")
 ```
 
 We subset our data into separate data-frames of categorical and continuous variables for ease of use. We also rename factor levels accordingly.
@@ -428,12 +422,15 @@ We subset our data into separate data-frames of categorical and continuous varia
 <h2> Extraneous Data Removal </h2>
 
 ```{r extraneous data removal, eval = T}
-cont$householdIncome[cont$householdIncome < 10000] <- NA
-cont$parents.USBorn <- cont$parents.USBorn - rep(1, nrow(cont))
-cont$employment.initialAge[cont$employment.initialAge > cont$age] <- NA
-cont$fatherDeath.respondentAge[cont$fatherDeath.respondentAge > cont$age] <- NA
-cont$motherDeath.respondentAge[cont$motherDeath.respondentAge > cont$age] <- NA
-cont$closeFamily.alive[cont$closeFamily.alive > 25] <- NA
+if("SESTRAT" %in% names(cpes.cleaned)){
+  cpes.cleaned <- cpes.cleaned %>% select(-starts_with("V") & -starts_with("NC") & -starts_with("NS") & -starts_with("NL") & -starts_with("CPES") & -c("SESTRAT", "SECLUSTR"))
+}
+cpes.cleaned$householdIncome[cpes.cleaned$householdIncome < 10000] <- NA
+cpes.cleaned$parents.USBorn <- cpes.cleaned$parents.USBorn - rep(1, nrow(cpes.cleaned))
+cpes.cleaned$employment.initialAge[cpes.cleaned$employment.initialAge > cpes.cleaned$age] <- NA
+cpes.cleaned$fatherDeath.respondentAge[cpes.cleaned$fatherDeath.respondentAge > cpes.cleaned$age] <- NA
+cpes.cleaned$motherDeath.respondentAge[cpes.cleaned$motherDeath.respondentAge > cpes.cleaned$age] <- NA
+cpes.cleaned$closeFamily.alive[cpes.cleaned$closeFamily.alive > 25] <- NA
 ```
 
 Extraneous or unusual data is either modified or removed.<br>
@@ -447,31 +444,33 @@ We conduct a brief EDA, looking at surface level trends in depression rate for r
 
 <h2>Region</h2>
 
-```{r eda region, eval = T, include = T}
-caseID_region <- data.frame("CASEID" = cat$CASEID, "region" = cat$region)
-caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
-region_depressed.lifetime <- inner_join(caseID_region, caseID_depressed.lifetime, by = "CASEID")
+```{r EDA: Region, eval = T, include = T}
+region_depression.lifetime <- select(cpes.cleaned, c("region", "depression.lifetime"))
 
-region_Pop <- as.data.frame(table(region_depressed.lifetime[,2])) %>% 
-  rename(region = Var1) %>% rename("regionPop" = Freq)
-region_depressedPop.lifetime <- as.data.frame(table(region_depressed.lifetime[region_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(region_depressed.lifetime$region))),-2] %>% 
-  rename("positive" = Freq)
+region_Pop <- as.data.frame(table(region_depression.lifetime[,"region"])) %>% 
+  rename(region = Var1) %>% 
+  rename("population" = Freq)
 
-region_depressed.lifetime <- cbind(region_Pop, region_depressedPop.lifetime$positive) %>% rename(positive = 'region_depressedPop.lifetime$positive') %>% mutate(rate = positive / regionPop)
-region_depressed.lifetime <- region_depressed.lifetime[region_depressed.lifetime$regionPop >= 30,]
+uniqueRegions <- length(unique(region_depression.lifetime$region))
+region_depressionPop.lifetime <- as.data.frame(
+  table(region_depression.lifetime[region_depression.lifetime$depression.lifetime == '1',]))[1:uniqueRegions,] %>% 
+  rename("endorsed" = Freq)
 
-region_depressed.lifetime$region <- factor(region_depressed.lifetime$region, 
-                                           levels = unique(region_depressed.lifetime$region)[order(region_depressed.lifetime$rate, decreasing = F)])
-region_Pop$region <- factor(region_depressed.lifetime$region, 
-                            levels = unique(region_depressed.lifetime$region)[order(region_depressed.lifetime$rate, decreasing = F)])
+region_depression.lifetime <- cbind(region_Pop, region_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "region_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
 
-regionDist.eda <- plot_ly(region_Pop, x = ~region, y = ~regionPop, type = 'bar') %>% 
+region_depression.lifetime <- region_depression.lifetime[region_depression.lifetime$population >= 30,]
+
+region_depression.lifetime$region <- factor(region_depression.lifetime$region, 
+                                           levels = unique(region_depression.lifetime$region)
+                                           [order(region_depression.lifetime$rate, decreasing = F)])
+
+regionDist.plot <- plot_ly(region_depression.lifetime, x = ~region, y = ~population, type = 'bar') %>% 
   layout(title = "Population by Region", xaxis = list(title = "Region"), yaxis = list(title = "Population", range = c(0, 8000)))
-regionDist.eda
+regionDist.plot
 
-region_depressed.lifetime.eda <- plot_ly(region_depressed.lifetime, x = ~region, y = ~rate, type = 'bar') %>% 
-  layout(title = "% Diagnosed with MDD by region (Lifetime)", xaxis = list(title = "Region"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,1)))
-region_depressed.lifetime.eda
+region_depression.lifetime.plot <- plot_ly(region_depression.lifetime, x = ~region, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Diagnosed with MDD by region (Lifetime)", xaxis = list(title = "Region"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+region_depression.lifetime.plot
 ```
 
 The South appears to be over-represented in our sample. Though, that should not skew the depression rate measures in the second graph, in which the South appears to be the least depressed at 13% vs. the Midwest's 17%
@@ -479,176 +478,219 @@ The South appears to be over-represented in our sample. Though, that should not 
 <h2>Gender</h2>
 
 ```{r eda sex, eval = T, include = T}
-caseID_sex <- data.frame("CASEID" = cat$CASEID, "sex" = cat$sex)
-caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
-sex_depressed.lifetime <- inner_join(caseID_sex, caseID_depressed.lifetime, by = "CASEID")
+sex_depression.lifetime <- select(cpes.cleaned, c("sex", "depression.lifetime"))
 
-sex_Pop <- as.data.frame(table(sex_depressed.lifetime[,2])) %>% 
-  rename(sex = Var1) %>% rename("sexPop" = Freq)
-sex_depressedPop.lifetime <- as.data.frame(table(sex_depressed.lifetime[sex_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(sex_depressed.lifetime$sex))),-2] %>% 
-  rename("positive" = Freq)
+sex_Pop <- as.data.frame(table(sex_depression.lifetime[,"sex"])) %>% 
+  rename(sex = Var1) %>% 
+  rename("population" = Freq)
 
-sex_depressed.lifetime <- cbind(sex_Pop, sex_depressedPop.lifetime$positive) %>% rename(positive = 'sex_depressedPop.lifetime$positive') %>% mutate(rate = positive / sexPop)
-sex_depressed.lifetime <- sex_depressed.lifetime[sex_depressed.lifetime$sexPop >= 30,]
+uniqueSexes <- length(unique(sex_depression.lifetime$sex))
+sex_depressionPop.lifetime <- as.data.frame(
+  table(sex_depression.lifetime[sex_depression.lifetime$depression.lifetime == '1',]))[1:uniqueSexes,] %>% 
+  rename("endorsed" = Freq)
 
-sex_depressed.lifetime$sex <- factor(sex_depressed.lifetime$sex, 
-                                     levels = unique(sex_depressed.lifetime$sex)[order(sex_depressed.lifetime$rate, decreasing = F)])
-sex_Pop$sex <- factor(sex_depressed.lifetime$sex, 
-                      levels = unique(sex_depressed.lifetime$sex)[order(sex_depressed.lifetime$rate, decreasing = F)])
+sex_depression.lifetime <- cbind(sex_Pop, sex_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "sex_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
 
-sexDist.eda <- plot_ly(sex_Pop, x = ~sex, y = ~sexPop, type = 'bar') %>% 
-  layout(title = "Population by sex", xaxis = list(title = "sex"), yaxis = list(title = "Population", range = c(0, 12000)))
-sexDist.eda
+sex_depression.lifetime <- sex_depression.lifetime[sex_depression.lifetime$population >= 30,]
 
-sex_depressed.lifetime.eda <- plot_ly(sex_depressed.lifetime, x = ~sex, y = ~rate, type = 'bar') %>% 
-  layout(title = "% Diagnosed with MDD by sex (Lifetime)", xaxis = list(title = "sex"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,1)))
-sex_depressed.lifetime.eda
+sex_depression.lifetime$sex <- factor(sex_depression.lifetime$sex, 
+                                           levels = unique(sex_depression.lifetime$sex)
+                                           [order(sex_depression.lifetime$rate, decreasing = F)])
+
+sexDist.plot <- plot_ly(sex_depression.lifetime, x = ~sex, y = ~population, type = 'bar') %>% 
+  layout(title = "Population by Sex", xaxis = list(title = "Sex"), yaxis = list(title = "Population", range = c(0, 13000)))
+sexDist.plot
+
+sex_depression.lifetime.plot <- plot_ly(sex_depression.lifetime, x = ~sex, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Diagnosed with MDD by Sex (Lifetime)", xaxis = list(title = "Sex"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+sex_depression.lifetime.plot
 ```
 
 Females are over-represented in our sample. They also have a higher depression rate at 16.9% compared to 10.5% for males
 
 <h2>Age</h2>
 
-```{r eda age, eval = T, include = T}
-caseID_age <- data.frame("CASEID" = cont$CASEID, "age" = cont$age)
-caseID_depressed.12Month <- data.frame("CASEID" = disorder$CASEID, "depressed.12Month" = disorder$disorder.12Month)
-age_depressed.12Month <- inner_join(caseID_age, caseID_depressed.12Month, by = "CASEID")
+```{r eda age, eval = F, include = T}
+age_depression.12Month <- select(cpes.cleaned, c("age", "depression.12Month"))
 
-age_Pop <- as.data.frame(table(age_depressed.12Month[,2])) %>% 
-  rename(age = Var1) %>% rename("agePop" = Freq)
-age_depressedPop.12Month <- as.data.frame(table(age_depressed.12Month[age_depressed.12Month$depressed.12Month == 'Endorsed', c(2, 3)]))[1:(length(unique(age_depressed.12Month$age))),-2] %>% 
-  rename("positive" = Freq)
+age_Pop <- as.data.frame(table(age_depression.12Month[,"age"])) %>% 
+  rename(age = Var1) %>% 
+  rename("population" = Freq)
 
-age_depressed.12Month <- cbind(age_Pop, age_depressedPop.12Month$positive) %>% rename(positive = 'age_depressedPop.12Month$positive') %>% mutate(rate = positive / agePop)
-age_depressed.12Month <- age_depressed.12Month[age_depressed.12Month$agePop >= 30,]
+uniqueAges <- length(unique(age_depression.12Month$age))
+age_depressionPop.12Month <- as.data.frame(
+  table(age_depression.12Month[age_depression.12Month$depression.12Month == '1',]))[1:uniqueAges,] %>% 
+  rename("endorsed" = Freq)
 
-ageDist.eda <- plot_ly(age_Pop, x = ~age, y = ~agePop, type = 'bar') %>% 
-  layout(title = "Population by age", xaxis = list(title = "age"), yaxis = list(title = "Population", range = c(0, 600)))
-ageDist.eda
+age_depression.12Month <- cbind(age_Pop, age_depressionPop.12Month$endorsed) %>% rename("endorsed" = "age_depressionPop.12Month$endorsed") %>% mutate(rate = endorsed / population)
 
-age_depressed.12Month.eda <- plot_ly(age_depressed.12Month, x = ~age, y = ~rate, type = 'scatter', mode = 'lines') %>% 
-  layout(title = "% Positive for MDD by age (12 Month)", xaxis = list(title = "age"), yaxis = list(title = "% Positive for MDD (12 Month)", range = c(0,0.5)))
-age_depressed.12Month.eda
+ageDist.plot <- plot_ly(age_depression.12Month, x = ~age, y = ~population, type = 'bar') %>% 
+  layout(title = "Population by Age", xaxis = list(title = "Age"), yaxis = list(title = "Population", range = c(0, 500)))
+ageDist.plot
+
+age_depression.12Month <- age_depression.12Month[age_depression.12Month$population >= 30,]
+age_depression.12Month %<>% mutate_at(c("age"), as.numeric)
+age_depression.12Month <- mutate(age_depression.12Month, age = age + 17)
+age_depression.12Month.fit <- lm(rate~age, data = age_depression.12Month)
+
+age_depression.12Month.plot <- plot_ly(age_depression.12Month, x = ~age, y = ~rate, type = 'scatter', mode = 'markers') %>% 
+  layout(title = "% Positive for MDD by Age (12Month)",
+         xaxis = list(title = "Age"), 
+         yaxis = list(title = "% Positive for MDD (12Month)", range = c(0,0.25))) %>%
+  add_trace(x = ~age, y = fitted(age_depression.12Month.fit), mode = 'lines')
+age_depression.12Month.plot
+summary(age_depression.12Month.fit)
 ```
 
 The age distribution matches that of the United States. For the graph of depression rates, ages from 87 to 99 were excluded, as they had less than 30 observations. Depression rate appears to generally trend downward as age increases.
 
 <h2>Race</h2>
 
-```{r eda race, eval = T, include = T}
-caseID_race <- data.frame("CASEID" = cat$CASEID, "race" = cat$race)
-caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
-race_depressed.lifetime <- inner_join(caseID_race, caseID_depressed.lifetime, by = "CASEID")
+```{r eda race, eval = F, include = T}
+race_depression.lifetime <- select(cpes.cleaned, c("race", "depression.lifetime"))
 
-race_Pop <- as.data.frame(table(race_depressed.lifetime[,2])) %>% 
-  rename(race = Var1) %>% rename("racePop" = Freq)
-race_depressedPop.lifetime <- as.data.frame(table(race_depressed.lifetime[race_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(race_depressed.lifetime$race))),-2] %>% 
-  rename("positive" = Freq)
+race_Pop <- as.data.frame(table(race_depression.lifetime[,"race"])) %>% 
+  rename(race = Var1) %>% 
+  rename("population" = Freq)
 
-race_depressed.lifetime <- cbind(race_Pop, race_depressedPop.lifetime$positive) %>% rename(positive = 'race_depressedPop.lifetime$positive') %>% mutate(rate = positive / racePop)
-race_depressed.lifetime <- race_depressed.lifetime[race_depressed.lifetime$racePop >= 30,]
+uniqueraces <- length(unique(race_depression.lifetime$race))
+race_depressionPop.lifetime <- as.data.frame(
+  table(race_depression.lifetime[race_depression.lifetime$depression.lifetime == '1',]))[1:uniqueraces,] %>% 
+  rename("endorsed" = Freq)
 
-race_depressed.lifetime$race <- factor(race_depressed.lifetime$race, 
-                                       levels = unique(race_depressed.lifetime$race)[order(race_depressed.lifetime$rate, decreasing = F)])
-race_Pop$race <- factor(race_depressed.lifetime$race, 
-                        levels = unique(race_depressed.lifetime$race)[order(race_depressed.lifetime$rate, decreasing = F)])
+race_depression.lifetime <- cbind(race_Pop, race_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "race_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
 
-raceDist.eda <- plot_ly(race_Pop, x = ~race, y = ~racePop, type = 'bar') %>% 
+race_depression.lifetime <- race_depression.lifetime[race_depression.lifetime$population >= 30,]
+
+race_depression.lifetime$race <- factor(race_depression.lifetime$race, 
+                                           levels = unique(race_depression.lifetime$race)
+                                           [order(race_depression.lifetime$rate, decreasing = F)])
+
+raceDist.plot <- plot_ly(race_depression.lifetime, x = ~race, y = ~population, type = 'bar') %>% 
   layout(title = "Population by Race", xaxis = list(title = "Race"), yaxis = list(title = "Population", range = c(0, 8000)))
-raceDist.eda
+raceDist.plot
 
-race_depressed.lifetime.eda <- plot_ly(race_depressed.lifetime, x = ~race, y = ~rate, type = 'bar') %>% 
-  layout(title = "% Diagnosed with MDD by Race", xaxis = list(title = "Race"), yaxis = list(title = "% Diagnosed with MDD", range = c(0,1)))
-race_depressed.lifetime.eda
+race_depression.lifetime.plot <- plot_ly(race_depression.lifetime, x = ~race, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Diagnosed with MDD by Race (Lifetime)", xaxis = list(title = "Race"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+race_depression.lifetime.plot
 ```
 
 The race distribution generally matches that of the United States. Depression rate appears to be the highest for "All Other" Minorities, Non-Hispanic Whites, and Puerto Ricans.
 
 <h2>Household Income</h2>
 
-```{r eda householdIncome, eval = T, include = T}
-caseID_householdIncome <- data.frame("CASEID" = cont$CASEID, "householdIncome" = cont$householdIncome)
-caseID_depressed.12Month <- data.frame("CASEID" = disorder$CASEID, "depressed.12Month" = disorder$disorder.12Month)
-householdIncome_depressed.12Month <- inner_join(caseID_householdIncome, caseID_depressed.12Month, by = "CASEID")
-householdIncome_depressed.12Month <- mutate(householdIncome_depressed.12Month, householdIncome = round_any(householdIncome, 5000, f = floor))
+```{r eda householdIncome, eval = F, include = T}
+householdIncome_depression.12Month <- select(cpes.cleaned, c("householdIncome", "depression.12Month"))
 
-householdIncome_Pop <- as.data.frame(table(householdIncome_depressed.12Month[,2])) %>% 
+householdIncome_depression.12Month <- mutate(householdIncome_depression.12Month, householdIncome = round_any(householdIncome, 5000, f = floor))
+
+householdIncome_Pop <- as.data.frame(table(householdIncome_depression.12Month[,"householdIncome"])) %>% 
   rename(householdIncome = Var1) %>% 
-  rename(householdIncomePop = Freq)
-householdIncome_depressedPop.12Month <- as.data.frame(table(householdIncome_depressed.12Month[householdIncome_depressed.12Month$depressed.12Month == 'Endorsed', c(2, 3)]))[1:(length(unique(householdIncome_depressed.12Month$householdIncome))),-2] %>% 
-  rename("positive" = Freq)
+  rename("population" = Freq)
 
-householdIncome_depressed.12Month <- merge(householdIncome_Pop, householdIncome_depressedPop.12Month, by = "householdIncome") %>% mutate(rate = positive / householdIncomePop)
-householdIncome_depressed.12Month <- householdIncome_depressed.12Month[householdIncome_depressed.12Month$householdIncomePop >= 30,]
+uniquehouseholdIncomes <- length(unique(householdIncome_depression.12Month$householdIncome)) - 1
+householdIncome_depressionPop.12Month <- as.data.frame(
+  table(householdIncome_depression.12Month[householdIncome_depression.12Month$depression.12Month == '1',]))[1:uniquehouseholdIncomes,] %>% 
+  rename("endorsed" = Freq)
 
-householdIncome_depressed.12Month <- householdIncome_depressed.12Month[householdIncome_depressed.12Month$positive != 0,]
-householdIncome_depressed.12Month <- householdIncome_depressed.12Month[order(householdIncome_depressed.12Month$householdIncome),]
+householdIncome_depression.12Month <- cbind(householdIncome_Pop, householdIncome_depressionPop.12Month$endorsed) %>% rename("endorsed" = "householdIncome_depressionPop.12Month$endorsed") %>% mutate(rate = endorsed / population)
 
-householdIncomeDist.eda <- plot_ly(householdIncome_Pop, x = ~householdIncome, y = ~householdIncomePop, type = 'bar') %>% 
-  layout(title = "Population by Annual Household Income (To Nearest 5k)", xaxis = list(title = "Population by Annual Household Income (Rounded to Nearest 5k)"), yaxis = list(title = "Population", range = c(0, 1500)))
-householdIncomeDist.eda
+householdIncomeDist.plot <- plot_ly(householdIncome_depression.12Month, x = ~householdIncome, y = ~population, type = 'bar') %>% 
+  layout(
+    title = "Population by Household Income",
+    xaxis = list(title = "Household Income"),
+    yaxis = list(title = "Population", range = c(0, 1500)))
+householdIncomeDist.plot
 
-householdIncome_depressed.12Month.eda <- plot_ly(householdIncome_depressed.12Month, x = ~householdIncome, y = ~rate, type = 'scatter', mode ='lines') %>% 
-  layout(title = "% Positive for MDD by Household Income", xaxis = list(title = "Annual Household Income (To Nearest 5k)"), yaxis = list(title = "% Positive for MDD", range = c(0,0.5)))
-householdIncome_depressed.12Month.eda
+householdIncome_depression.12Month <- householdIncome_depression.12Month[householdIncome_depression.12Month$population >= 60,]
+householdIncome_depression.12Month %<>% mutate_at(c("householdIncome"), as.numeric)
+householdIncome_depression.12Month <- mutate(householdIncome_depression.12Month, householdIncome = 5000*householdIncome + 5000)
+householdIncome_depression.12Month.fit <- lm(rate~householdIncome, data = householdIncome_depression.12Month)
+
+householdIncome_depression.12Month.plot <- plot_ly(householdIncome_depression.12Month, x = ~householdIncome, y = ~rate, type = 'scatter', mode = 'markers') %>% 
+  layout(title = "% Positive for MDD by Household Income (12Month)",
+         xaxis = list(title = "Household Income"), 
+         yaxis = list(title = "% Positive for MDD (12Month)", range = c(0,0.25))) %>%
+  add_trace(x = ~householdIncome, y = fitted(householdIncome_depression.12Month.fit), mode = 'lines')
+householdIncome_depression.12Month.plot
+
+summary(householdIncome_depression.12Month.fit)
 ```
 
 Income distribution appears to generally follow that of the United States, though our model has income capped at 200,000. Incomes have also been rounded to the nearest floor by increments of 5000, and observations of less than 30 have been omitted. Depression rate generally decreases from 10k to 100k, increases from 100k to 145k, drops at 150k, and remains steady afterward, with perhaps a slight increase.
 
 <h2>Employment</h2>
 
-```{r eda employment, eval = T, include = T}
-caseID_employment.current <- data.frame("CASEID" = cat$CASEID, "employment.current" = cat$employment.current)
-caseID_depressed.12Month <- data.frame("CASEID" = disorder$CASEID, "depressed.12Month" = disorder$disorder.12Month)
-employment.current_depressed.12Month <- inner_join(caseID_employment.current, caseID_depressed.12Month, by = "CASEID")
+```{r eda employment, eval = F, include = T}
+employment.current_depression.lifetime <- select(cpes.cleaned, c("employment.current", "depression.lifetime"))
 
-employment.current_Pop <- as.data.frame(table(employment.current_depressed.12Month[,2])) %>% 
-  rename(employment.current = Var1) %>% rename("employment.currentPop" = Freq)
-employment.current_depressedPop.12Month <- as.data.frame(table(employment.current_depressed.12Month[employment.current_depressed.12Month$depressed.12Month == 'Endorsed', c(2, 3)]))[1:(length(unique(employment.current_depressed.12Month$employment.current))),-2] %>% 
-  rename("positive" = Freq)
+employment.current_Pop <- as.data.frame(table(employment.current_depression.lifetime[,"employment.current"])) %>% 
+  rename(employment.current = Var1) %>% 
+  rename("population" = Freq)
 
-employment.current_depressed.12Month <- cbind(employment.current_Pop, employment.current_depressedPop.12Month[-4,2]) %>% rename(positive = 'employment.current_depressedPop.12Month[-4, 2]') %>% mutate(rate = positive / employment.currentPop)
-employment.current_depressed.12Month <- employment.current_depressed.12Month[employment.current_depressed.12Month$employment.currentPop >= 30,]
+uniqueemployment.currents <- length(unique(employment.current_depression.lifetime$employment.current)) - 1
+employment.current_depressionPop.lifetime <- as.data.frame(
+  table(employment.current_depression.lifetime[employment.current_depression.lifetime$depression.lifetime == '1',]))[1:uniqueemployment.currents,] %>% 
+  rename("endorsed" = Freq)
 
-employment.current_depressed.12Month$employment.current <- factor(employment.current_depressed.12Month$employment.current, 
-                                                                  levels = unique(employment.current_depressed.12Month$employment.current)[order(employment.current_depressed.12Month$rate, decreasing = F)])
-employment.current_Pop$employment.current <- factor(employment.current_depressed.12Month$employment.current, 
-                                                    levels = unique(employment.current_depressed.12Month$employment.current)[order(employment.current_depressed.12Month$rate, decreasing = F)])
+employment.current_depression.lifetime <- cbind(employment.current_Pop, employment.current_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "employment.current_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
 
-employment.currentDist.eda <- plot_ly(employment.current_Pop, x = ~employment.current, y = ~employment.currentPop, type = 'bar') %>% 
-  layout(title = "Population by Employment Status", xaxis = list(title = "Employment Status"), yaxis = list(title = "Population", range = c(0, 14000)))
-employment.currentDist.eda
+employment.current_depression.lifetime <- employment.current_depression.lifetime[employment.current_depression.lifetime$population >= 30,]
 
-employment.current_depressed.12Month.eda <- plot_ly(employment.current_depressed.12Month, x = ~employment.current, y = ~rate, type = 'bar') %>% 
-  layout(title = "% Positive for MDD by Employment Status", xaxis = list(title = "Employment Status"), yaxis = list(title = "% Positive with MDD", range = c(0,0.5)))
-employment.current_depressed.12Month.eda
+employment.current_depression.lifetime$employment.current <- factor(employment.current_depression.lifetime$employment.current, 
+                                           levels = unique(employment.current_depression.lifetime$employment.current)
+                                           [order(employment.current_depression.lifetime$rate, decreasing = F)])
+
+employment.currentDist.plot <- plot_ly(employment.current_depression.lifetime, x = ~employment.current, y = ~population, type = 'bar') %>% 
+  layout(title = "Population by employment.current", xaxis = list(title = "employment.current"), yaxis = list(title = "Population", range = c(0, 15000)))
+employment.currentDist.plot
+
+employment.current_depression.lifetime.plot <- plot_ly(employment.current_depression.lifetime, x = ~employment.current, y = ~rate, type = 'bar') %>% 
+  layout(title = "% Diagnosed with MDD by employment.current (Lifetime)", xaxis = list(title = "employment.current"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+employment.current_depression.lifetime.plot
 ```
 
 Employment distribution generally resembles that of the United States, save for a slightly higher than expected rate of respondents not in the labor force. Employment appears to lower depression rates, as "Not in Labor Force" and "Unemployed" groups have the highest depression rates.
+
 <h2>Education</h2>
 
-```{r eda education, eval = T, include = T}
-contDupli <- cont[cont$age >= 23,]
+```{r eda education, eval = F, include = T}
+yearsOfEducation.respondent_depression.lifetime <- select(cpes.cleaned, c("yearsOfEducation.respondent", "depression.lifetime", "age"))
 
-caseID_yearsOfEducation.respondent <- data.frame("CASEID" = contDupli$CASEID, "yearsOfEducation.respondent" = contDupli$yearsOfEducation.respondent)
-caseID_depressed.lifetime <- data.frame("CASEID" = disorder$CASEID, "depressed.lifetime" = disorder$disorder.lifetime)
-yearsOfEducation.respondent_depressed.lifetime <- inner_join(caseID_yearsOfEducation.respondent, caseID_depressed.lifetime, by = "CASEID")
+yearsOfEducation.respondent_depression.lifetime <- yearsOfEducation.respondent_depression.lifetime[yearsOfEducation.respondent_depression.lifetime$age > 23,] %>% 
+  select(-c("age"))
 
-yearsOfEducation.respondent_Pop <- as.data.frame(table(yearsOfEducation.respondent_depressed.lifetime[,2])) %>% 
-  rename(yearsOfEducation.respondent = Var1) %>% rename("yearsOfEducation.respondentPop" = Freq)
-yearsOfEducation.respondent_depressedPop.lifetime <- as.data.frame(table(yearsOfEducation.respondent_depressed.lifetime[yearsOfEducation.respondent_depressed.lifetime$depressed.lifetime == 'Endorsed', c(2, 3)]))[1:(length(unique(yearsOfEducation.respondent_depressed.lifetime$yearsOfEducation.respondent))),-2] %>% 
-  rename("positive" = Freq)
+yearsOfEducation.respondent_Pop <- as.data.frame(table(yearsOfEducation.respondent_depression.lifetime[,"yearsOfEducation.respondent"])) %>% 
+  rename(yearsOfEducation.respondent = Var1) %>% 
+  rename("population" = Freq)
 
-yearsOfEducation.respondent_depressed.lifetime <- cbind(yearsOfEducation.respondent_Pop, yearsOfEducation.respondent_depressedPop.lifetime[-15,2]) %>% rename(positive = 'yearsOfEducation.respondent_depressedPop.lifetime[-15, 2]') %>% mutate(rate = positive / yearsOfEducation.respondentPop)
-yearsOfEducation.respondent_depressed.lifetime <- yearsOfEducation.respondent_depressed.lifetime[yearsOfEducation.respondent_depressed.lifetime$yearsOfEducation.respondentPop >= 30,]
+uniqueyearsOfEducation.respondents <- length(unique(yearsOfEducation.respondent_depression.lifetime$yearsOfEducation.respondent)) - 1
+yearsOfEducation.respondent_depressionPop.lifetime <- as.data.frame(
+  table(yearsOfEducation.respondent_depression.lifetime[yearsOfEducation.respondent_depression.lifetime$depression.lifetime == '1',]))[1:uniqueyearsOfEducation.respondents,] %>% 
+  rename("endorsed" = Freq)
 
-yearsOfEducation.respondentDist.eda <- plot_ly(yearsOfEducation.respondent_Pop, x = ~yearsOfEducation.respondent, y = ~yearsOfEducation.respondentPop, type = 'bar') %>% 
-  layout(title = "Population by Years of Education", xaxis = list(title = "Years of Education"), yaxis = list(title = "Population", range = c(0, 6000)))
-yearsOfEducation.respondentDist.eda
+yearsOfEducation.respondent_depression.lifetime <- cbind(yearsOfEducation.respondent_Pop, yearsOfEducation.respondent_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "yearsOfEducation.respondent_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
 
-yearsOfEducation.respondent_depressed.lifetime.eda <- plot_ly(yearsOfEducation.respondent_depressed.lifetime, x = ~yearsOfEducation.respondent, y = ~rate, type = 'scatter', mode = 'lines') %>% 
-  layout(title = "% Diagnosed with MDD by Years of Education (Lifetime)", xaxis = list(title = "Years of Education"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.5)))
-yearsOfEducation.respondent_depressed.lifetime.eda
+yearsOfEducation.respondentDist.plot <- plot_ly(yearsOfEducation.respondent_depression.lifetime, x = ~yearsOfEducation.respondent, y = ~population, type = 'bar') %>% 
+  layout(
+    title = "Population by Years of Education",
+    xaxis = list(title = "Years of Education"),
+    yaxis = list(title = "Population", range = c(0, 6000)))
+yearsOfEducation.respondentDist.plot
+
+yearsOfEducation.respondent_depression.lifetime <- yearsOfEducation.respondent_depression.lifetime[yearsOfEducation.respondent_depression.lifetime$population >= 60,]
+yearsOfEducation.respondent_depression.lifetime %<>% mutate_at(c("yearsOfEducation.respondent"), as.numeric)
+yearsOfEducation.respondent_depression.lifetime <- mutate(yearsOfEducation.respondent_depression.lifetime, yearsOfEducation.respondent = yearsOfEducation.respondent + 3)
+yearsOfEducation.respondent_depression.lifetime.fit <- lm(rate~yearsOfEducation.respondent, data = yearsOfEducation.respondent_depression.lifetime)
+
+yearsOfEducation.respondent_depression.lifetime.plot <- plot_ly(yearsOfEducation.respondent_depression.lifetime, x = ~yearsOfEducation.respondent, y = ~rate, type = 'scatter', mode = 'markers') %>% 
+  layout(title = "% Diagnosed with MDD by Years of Education (lifetime)",
+         xaxis = list(title = "Years of Education"), 
+         yaxis = list(title = "% Diagnosed with MDD (lifetime)", range = c(0,0.25))) %>%
+  add_trace(x = ~yearsOfEducation.respondent, y = fitted(yearsOfEducation.respondent_depression.lifetime.fit), mode = 'lines')
+yearsOfEducation.respondent_depression.lifetime.plot
+
+summary(yearsOfEducation.respondent_depression.lifetime.fit)
 ```
 
 The education distribution is as expected, and representative of the United States, with an expected peak at 12 years. To plot depression rates, respondents of less than 23 years of age were excluded for the purpose of modeling lifetime risk of depression. Save for a peak at 4 years of education, depression rates generally trend upwards as people get more educated, until it plateaus at around 13.
@@ -670,14 +712,13 @@ Variables of interest relevant to a 30 day prediction are: *physicalHealth* *soc
 
 Bolded variables have a missingness of less than 60%
 
-```{r 30 day initial, eval = F}
-#Create data: dataframe of all relevant vars to whether or not one has disorder in 30 day timeframe
-caseID_disorder.30day <- disorder[,c(1, 4)]
-relevantVarsCont <- select(cont, c("healthWorkAbsence.30day", "daysMobilityDifficult.30day", "daysOvertime.30day", "jobPerformance.30day", "CASEID"))
-relevantVarsCat <- select(cat, c("physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "socialLifeDifficulty.30day", "difficutlyRemembering.30day", "CASEID"))
-relevantVars <- merge(relevantVarsCat, relevantVarsCont, by = "CASEID")
-data <- merge(relevantVars, caseID_disorder.30day, by = "CASEID")
-data <- data[is.na(data$disorder.30day) == F,-1]
+<h2>Null Model</h2>
+Assume MCE = 50%, Sensitivity: 50%, Specificity: 50%
+
+<h2>Single Tree</h2>
+```{r tree 30day,  eval = T, include = T}
+data <- select(cpes.cleaned, c("physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "socialLifeDifficulty.30day", "difficutlyRemembering.30day", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "daysOvertime.30day", "jobPerformance.30day"))
+
 levels(data$disorder.30day) <- list('1' = "Endorsed", '0' = "Not Endorsed")
 
 #Save unimputed data
@@ -733,13 +774,7 @@ if (file.exists("data/30dayTestTwo_imputed.Rda")) {
   file.remove("data/30dayTestTwo_imputed.Rda")
 }
 saveRDS(testTwo, file = "data/30dayTestTwo_imputed.Rda")
-```
 
-<h2>Null Model</h2>
-Assume MCE = 50%, Sensitivity: 50%, Specificity: 50%
-
-<h2>Single Tree</h2>
-```{r tree 30day,  eval = T, include = T}
 # Imputed (Initial)
 # Accuracy : 0.772         
 # Sensitivity : 0.6029        
@@ -867,6 +902,7 @@ Forests were grown from preimputed (rfImpute performed on entire dataset of inte
 
 Once more, we identify our optimal forest as the one with the lowest overall MCE while maintaining a high Sensitivity and Specificity.
 
+
 #Best True Positive Rate, Horrible Overall Accuracy/MCE
 ```{r rfSetup: allVars preimputed, eval = T}
 train <- readRDS("data/30dayTrain_imputed.Rda")
@@ -949,6 +985,7 @@ train.endorsed <- train[train$disorder.30day == "1",]
 train.notEndorsed <- train[train$disorder.30day == "0",]
 prob <- nrow(train.endorsed)/nrow(train.notEndorsed)
 set.seed(104)
+
 ind <- sample(2, nrow(train.notEndorsed), replace = T, prob = c(prob, 1-prob))
 train.notEndorsed <- train.notEndorsed[ind == 1,]
 train.balanced <- rbind(train.notEndorsed, train.endorsed)
@@ -1197,7 +1234,15 @@ The optimal algorithm was our LASSO trained on a allVars postimputed training se
 
 <h2>boosting</h2>
 ```{r boosting 30day, eval = T}
+train <- readRDS("data/30dayTrain_imputed.Rda")
+testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
+train <- train[,c(10, 1:9)]
 
+trainm <- sparse.model.matrix(disorder.30day~.-1, data = train)
+train_label <- train[,"disorder.30day"]
+train_matrix <- xgb.DMatrix(data = as.matrix(trainm), label = train_label)
+
+testm <- trainm <- sparse.model.matrix(disorder.30day~.-1, data = testOne)
 ```
 
 <h2>deep learning</h2>
