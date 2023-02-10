@@ -10,6 +10,7 @@ output:
 ---
 
 ```{r setup, include = F}
+if(!require("pacman")) install.packages("knitr")
 #Knit default settings
 knitr::opts_chunk$set(echo = T, fig.width=8, fig.height=4, warning = F)
 
@@ -18,16 +19,17 @@ options(scipen = 0, digits = 3)
 
 #Load required packages
 if(!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate, plyr, randomForest, caret, psych, rpart, rpart.plot, xgboost,
-               plotROC, usmap, glmnet, plotly, haven, magrittr, Stat2Data, skimr, GGally, rmdformats, prettydoc)
+pacman::p_load(tidyverse, dplyr, ggplot2, data.table, lubridate, plyr, randomForest, caret, psych, rpart, rpart.plot, xgboost, plotROC, usmap, glmnet, plotly, haven, magrittr, Stat2Data, skimr, GGally, rmdformats, prettydoc)
 ```
 
 ```{r Initial: Load, eval = F}
-cpes.raw <- as.data.frame(read_sav("data/20240-0001-Data.sav"))
-if (file.exists("data/cpes.Rda")) {
-  file.remove("data/cpes.Rda")
-}
-saveRDS(cpes.raw, file = "data/cpes.Rda")
+# cpes.raw <- as.data.frame(read_sav("data/20240-0001-Data.sav"))
+# if (file.exists("data/cpes.Rda")) {
+#   file.remove("data/cpes.Rda")
+# }
+# saveRDS(cpes.raw, file = "data/cpes.Rda")
+
+# ignorable, file already saved as Rda
 ```
 
 <h1>Abstract</h1>
@@ -412,9 +414,9 @@ cpes.cleaned$closeRelative.seriousMemoryProblem <- recode_factor(cpes.cleaned$cl
 cpes.cleaned$closeRelative.depression <- recode_factor(cpes.cleaned$closeRelative.depression, '1' = "Yes", '5' = "No")
 cpes.cleaned$closeRelative.anxiety <- recode_factor(cpes.cleaned$closeRelative.anxiety, '1' = "Yes", '5' = "No")
 
-cpes.cleaned$depression.lifetime <- recode_factor(depression$depression.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
-cpes.cleaned$depression.12Month <- recode_factor(depression$depression.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
-cpes.cleaned$depression.30day <- recode_factor(depression$depression.30day, '1' = "Endorsed", '5' = "Not Endorsed")
+cpes.cleaned$depression.lifetime <- recode_factor(cpes.cleaned$depression.lifetime, '1' = "Endorsed", '5' = "Not Endorsed")
+cpes.cleaned$depression.12Month <- recode_factor(cpes.cleaned$depression.12Month, '1' = "Endorsed", '5' = "Not Endorsed")
+cpes.cleaned$depression.30day <- recode_factor(cpes.cleaned$depression.30day, '1' = "Endorsed", '5' = "Not Endorsed")
 ```
 
 We subset our data into separate data-frames of categorical and continuous variables for ease of use. We also rename factor levels accordingly.
@@ -697,10 +699,10 @@ The education distribution is as expected, and representative of the United Stat
 
 <h2>Pairwise</h2>
 
-```{r eda pairwise, eval = T, include = T, fig.height=54, fig.width=96}
-pairs.panels(cont[2:27])
-#TODO: Exclude depression variables
-```
+# ```{r eda pairwise, eval = T, include = T, fig.height=54, fig.width=96}
+# pairwise <- pairs.panels(cont[2:27])
+# #TODO: Exclude depression variables
+# ```
 
 Pairwise plot of all continuous variables. High level assessment for multicollinearity, and potential interesting relationships between variables.
 
@@ -717,9 +719,10 @@ Assume MCE = 50%, Sensitivity: 50%, Specificity: 50%
 
 <h2>Single Tree</h2>
 ```{r tree 30day,  eval = T, include = T}
-data <- select(cpes.cleaned, c("physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "socialLifeDifficulty.30day", "difficutlyRemembering.30day", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "daysOvertime.30day", "jobPerformance.30day"))
+data <- select(cpes.cleaned, c("depression.30day", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "socialLifeDifficulty.30day", "difficutlyRemembering.30day", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "daysOvertime.30day", "jobPerformance.30day"))
 
-levels(data$disorder.30day) <- list('1' = "Endorsed", '0' = "Not Endorsed")
+# data <- cpes.cleaned
+levels(cpes.cleaned$depression.30day) <- list('1' = "Endorsed", '0' = "Not Endorsed")
 
 #Save unimputed data
 if (file.exists("data/30dayData_unimputed.Rda")) {
@@ -727,9 +730,11 @@ if (file.exists("data/30dayData_unimputed.Rda")) {
 }
 saveRDS(data, file = "data/30dayData_unimputed.Rda")
 
+data <- data[is.na(data$depression.30day) == FALSE,]
+
 #Create and save imputed data
 set.seed(100)
-data.imputed <- rfImpute(disorder.30day~., data = data)
+data.imputed <- rfImpute(depression.30day~., data = data)
 if (file.exists("data/30dayData_imputed.Rda")) {
   file.remove("data/30dayData_imputed.Rda")
 }
@@ -827,8 +832,8 @@ train <- readRDS("data/30dayTrain_imputed.Rda")
 # Specificity : 0.7198  
 # train <- readRDS("data/30dayTrain_unimputed.Rda")
 
-train.endorsed <- train[train$disorder.30day == "1",]
-train.notEndorsed <- train[train$disorder.30day == "0",]
+train.endorsed <- train[train$depression.30day == "1",]
+train.notEndorsed <- train[train$depression.30day == "0",]
 prob <- nrow(train.endorsed)/nrow(train.notEndorsed)
 set.seed(99)
 ind <- sample(2, nrow(train.notEndorsed), replace = T, prob = c(prob, 1-prob))
@@ -837,57 +842,57 @@ train.balanced <- rbind(train.notEndorsed, train.endorsed)
 
 testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
 
-tree.fit <- rpart(disorder.30day~., data = train.balanced, method = "class")
+tree.fit <- rpart(depression.30day~., data = train.balanced, method = "class")
 tree.fit.pred <- predict(tree.fit, testOne, type = "class")
-confusionMatrix(tree.fit.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.pred, testOne$depression.30day)
 tree.fit$variable.importance[order(tree.fit$variable.importance)]
 
 train.balanced.iter1 <- select(train.balanced, -c("jobPerformance.30day"))
-tree.fit.iter1 <- rpart(disorder.30day~., data = train.balanced.iter1, method = "class")
+tree.fit.iter1 <- rpart(depression.30day~., data = train.balanced.iter1, method = "class")
 tree.fit.iter1.pred <- predict(tree.fit.iter1, testOne, type = "class")
-confusionMatrix(tree.fit.iter1.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter1.pred, testOne$depression.30day)
 tree.fit.iter1$variable.importance[order(tree.fit.iter1$variable.importance)]
 
 train.balanced.iter2 <- select(train.balanced, -c("jobPerformance.30day", "daysMobilityDifficult.30day"))
-tree.fit.iter2 <- rpart(disorder.30day~., data = train.balanced.iter2, method = "class")
+tree.fit.iter2 <- rpart(depression.30day~., data = train.balanced.iter2, method = "class")
 tree.fit.iter2.pred <- predict(tree.fit.iter2, testOne, type = "class")
-confusionMatrix(tree.fit.iter2.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter2.pred, testOne$depression.30day)
 tree.fit.iter2$variable.importance[order(tree.fit.iter2$variable.importance)]
 
 train.balanced.iter3 <- select(train.balanced, -c("jobPerformance.30day", "daysMobilityDifficult.30day", "daysOvertime.30day"))
-tree.fit.iter3 <- rpart(disorder.30day~., data = train.balanced.iter3, method = "class")
+tree.fit.iter3 <- rpart(depression.30day~., data = train.balanced.iter3, method = "class")
 tree.fit.iter3.pred <- predict(tree.fit.iter3, testOne, type = "class")
-confusionMatrix(tree.fit.iter3.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter3.pred, testOne$depression.30day)
 tree.fit.iter3$variable.importance[order(tree.fit.iter3$variable.importance)]
 
 train.balanced.iter4 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day"))
-tree.fit.iter4 <- rpart(disorder.30day~., data = train.balanced.iter4, method = "class")
+tree.fit.iter4 <- rpart(depression.30day~., data = train.balanced.iter4, method = "class")
 tree.fit.iter4.pred <- predict(tree.fit.iter4, testOne, type = "class")
-confusionMatrix(tree.fit.iter4.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter4.pred, testOne$depression.30day)
 tree.fit.iter4$variable.importance[order(tree.fit.iter4$variable.importance)]
 
 train.balanced.iter5 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day"))
-tree.fit.iter5 <- rpart(disorder.30day~., data = train.balanced.iter5, method = "class")
+tree.fit.iter5 <- rpart(depression.30day~., data = train.balanced.iter5, method = "class")
 tree.fit.iter5.pred <- predict(tree.fit.iter5, testOne, type = "class")
-confusionMatrix(tree.fit.iter5.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter5.pred, testOne$depression.30day)
 tree.fit.iter5$variable.importance[order(tree.fit.iter5$variable.importance)]
 
 train.balanced.iter6 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day", "difficutlyRemembering.30day"))
-tree.fit.iter6 <- rpart(disorder.30day~., data = train.balanced.iter6, method = "class")
+tree.fit.iter6 <- rpart(depression.30day~., data = train.balanced.iter6, method = "class")
 tree.fit.iter6.pred <- predict(tree.fit.iter6, testOne, type = "class")
-confusionMatrix(tree.fit.iter6.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter6.pred, testOne$depression.30day)
 tree.fit.iter6$variable.importance[order(tree.fit.iter6$variable.importance)]
 
 train.balanced.iter7 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day", "difficutlyRemembering.30day", "healthWorkAbsence.30day"))
-tree.fit.iter7 <- rpart(disorder.30day~., data = train.balanced.iter7, method = "class")
+tree.fit.iter7 <- rpart(depression.30day~., data = train.balanced.iter7, method = "class")
 tree.fit.iter7.pred <- predict(tree.fit.iter7, testOne, type = "class")
-confusionMatrix(tree.fit.iter7.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter7.pred, testOne$depression.30day)
 tree.fit.iter7$variable.importance[order(tree.fit.iter7$variable.importance)]
 
 train.balanced.iter8 <- select(train.balanced, -c("daysOvertime.30day", "jobPerformance.30day", "daysMobilityDifficult.30day", "physicalHealth.30day", "difficultyConcentrating.30day", "difficutlyRemembering.30day", "healthWorkAbsence.30day", "difficultyUnderstandingSituation.30day"))
-tree.fit.iter8 <- rpart(disorder.30day~., data = train.balanced.iter8, method = "class")
+tree.fit.iter8 <- rpart(depression.30day~., data = train.balanced.iter8, method = "class")
 tree.fit.iter8.pred <- predict(tree.fit.iter8, testOne, type = "class")
-confusionMatrix(tree.fit.iter8.pred, testOne$disorder.30day)
+confusionMatrix(tree.fit.iter8.pred, testOne$depression.30day)
 tree.fit.iter8$variable.importance[order(tree.fit.iter8$variable.importance)]
 
 tree.fit.iter5$variable.importance
@@ -924,7 +929,7 @@ num <- 3
 train <- train[(rowSums(is.na(train)) <= num),]
 set.seed(102)
 if(num != 0){
-  train <- rfImpute(disorder.30day~., data = train) #Impute missing values
+  train <- rfImpute(depression.30day~., data = train) #Impute missing values
 }
 
 testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
@@ -942,10 +947,10 @@ testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
 #Comparable to "Best Balance". Better True Negative, Worse True Positive. Tested on larger test set.
 ```{r rfSetup: goodVars preimputed, eval = T}
 train <- readRDS("data/30dayTrain_imputed.Rda")
-train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day"))
 
 testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
-testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day")))
 
 # Optimal mtry: 2
 # OOB estimate of  error rate: 30.9%
@@ -957,16 +962,16 @@ testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficul
 #Best True Negative Rate & Overall Accuracy
 ```{r rfSetup: goodVars postimputed/unimputed, eval = T}
 train <- readRDS("data/30dayTrain_unimputed.Rda")
-train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day"))
 num <- 0 #Remove all rows with more "num" NAs. Set to 0 to do unimputed training
 train <- train[(rowSums(is.na(train)) <= num),]
 set.seed(103)
 if(num != 0){
-  train <- rfImpute(disorder.30day~., data = train)
+  train <- rfImpute(depression.30day~., data = train)
 }
 
 testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
-testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day")))
 
 # Optimal num: 0 (Unimputed)
 # Optimal mtry: 2
@@ -981,8 +986,8 @@ testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficul
 n <- 9
 
 #Create balanced training set, where num endorsed ~ num not endorsed
-train.endorsed <- train[train$disorder.30day == "1",]
-train.notEndorsed <- train[train$disorder.30day == "0",]
+train.endorsed <- train[train$depression.30day == "1",]
+train.notEndorsed <- train[train$depression.30day == "0",]
 prob <- nrow(train.endorsed)/nrow(train.notEndorsed)
 set.seed(104)
 
@@ -992,7 +997,7 @@ train.balanced <- rbind(train.notEndorsed, train.endorsed)
 
 rf.error.p <- rep(0, n)
 for (p in 1:n){
-  rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = p)
+  rf.fit <- randomForest(depression.30day~., data = train.balanced, ntree = 500, mtry = p)
   rf.error.p[p] <- rf.fit$err.rate[500]
 }
 plot(1:n, rf.error.p, pch=16,
@@ -1003,9 +1008,9 @@ lines(1:n, rf.error.p)
 
 rf.error.p <- rep(0, n)
 for (p in 1:n){
-  rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = p)
+  rf.fit <- randomForest(depression.30day~., data = train.balanced, ntree = 500, mtry = p)
   rf.fit.pred <- predict(rf.fit, testOne)
-  rf.error.p[p] <- confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[1] #True Positive
+  rf.error.p[p] <- confusionMatrix(rf.fit.pred, testOne$depression.30day)$byClass[1] #True Positive
 }
 plot(1:n, rf.error.p, pch=16,
      main = "TestOne True Positive Rate for mtry",
@@ -1015,9 +1020,9 @@ lines(1:n, rf.error.p)
 
 rf.error.p <- rep(0, n)
 for (p in 1:n){
-  rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = p)
+  rf.fit <- randomForest(depression.30day~., data = train.balanced, ntree = 500, mtry = p)
   rf.fit.pred <- predict(rf.fit, testOne)
-  rf.error.p[p] <- confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[2] #True Negative
+  rf.error.p[p] <- confusionMatrix(rf.fit.pred, testOne$depression.30day)$byClass[2] #True Negative
 }
 plot(1:n, rf.error.p, pch=16,
      main = "TestOne True Negative Rate for mtry",
@@ -1027,18 +1032,18 @@ lines(1:n, rf.error.p)
 
 #Final Model
 set.seed(105)
-rf.fit <- randomForest(disorder.30day~., data = train.balanced, ntree = 500, mtry = 2, proximity = T) ########################Modify mtry
+rf.fit <- randomForest(depression.30day~., data = train.balanced, ntree = 500, mtry = 2, proximity = T) ########################Modify mtry
 rf.fit
 varImpPlot(rf.fit, sort=T, n.var=min(10, nrow(rf.fit$importance)))
 hist(treesize(rf.fit), main = "No. of nodes", col = "blue")
 
 #CANNOT HANDLE NA VALUES FOR FEATURES IN TEST SETS
 rf.fit.pred <- predict(rf.fit, testOne)
-confusionMatrix(rf.fit.pred, testOne$disorder.30day)$overall[1] #Accuracy
-confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[1] #True Positive
-confusionMatrix(rf.fit.pred, testOne$disorder.30day)$byClass[2] #True Negative
+confusionMatrix(rf.fit.pred, testOne$depression.30day)$overall[1] #Accuracy
+confusionMatrix(rf.fit.pred, testOne$depression.30day)$byClass[1] #True Positive
+confusionMatrix(rf.fit.pred, testOne$depression.30day)$byClass[2] #True Negative
 
-MDSplot(rf.fit, testOne$disorder.30day)
+MDSplot(rf.fit, testOne$depression.30day)
 ```
 
 The best model was our postimputed forest with mtry = 4, and number of NAs allowed in training set before imputation set to 3: MCE = 44.4%, Sensitivity = 0.667, Specificity = 0.625. Ranked by importance according to mean decrease gini, the most important variables were daysMobilityDifficult, jobPerformance, and daysOvertime. For important variables, this appears to contradict our single tree model.
@@ -1065,7 +1070,7 @@ num <- 3
 train <- train[(rowSums(is.na(train)) <= num),]
 if(num != 0){
   set.seed(107)
-  train <- rfImpute(disorder.30day~., data = train) #Impute missing values
+  train <- rfImpute(depression.30day~., data = train) #Impute missing values
 }
 
 testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
@@ -1084,10 +1089,10 @@ testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
 
 ```{r lassoSetup: goodVars preimputed, eval = T}
 train <- readRDS("data/30dayTrain_imputed.Rda")
-train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day"))
 
 testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
-testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day")))
 
 # Training Error: 0.42
 # Testing Error: 0.0466
@@ -1098,16 +1103,16 @@ testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficul
 
 ```{r lassoSetup: goodVars postimputed/unimputed, eval = T}
 train <- readRDS("data/30dayTrain_unimputed.Rda")
-train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day"))
+train <- select(train, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day"))
 num <- 2 #Remove all rows with more "num" NAs. Set to 0 to do unimputed training
 train <- train[(rowSums(is.na(train)) <= num),]
 set.seed(108)
 if(num != 0){
-  train <- rfImpute(disorder.30day~., data = train)
+  train <- rfImpute(depression.30day~., data = train)
 }
 
 testOne <- readRDS("data/30dayTestOne_unimputed.Rda")
-testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "disorder.30day")))
+testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "depression.30day")))
 
 # Optimal num: 0 (Unimputed)
 # Training Error: 43%
@@ -1122,8 +1127,8 @@ testOne <- na.omit(select(testOne, c("physicalHealth.30day", "socialLifeDifficul
 # pairs.panels(train[c(-1, -2, -3, -4, -5, -6, -10)])
 
 #Form balanced training data
-train.endorsed <- train[train$disorder.30day == "1",]
-train.notEndorsed <- train[train$disorder.30day == "0",]
+train.endorsed <- train[train$depression.30day == "1",]
+train.notEndorsed <- train[train$depression.30day == "0",]
 prob <- nrow(train.endorsed)/nrow(train.notEndorsed)
 set.seed(109)
 ind <- sample(2, nrow(train.notEndorsed), replace = T, prob = c(prob, 1-prob))
@@ -1136,7 +1141,7 @@ varType <- 1 ###################################################################
 #Isolate target
 ytrain <- train.balanced[, varType]
 #Isolate features
-xtrain <- model.matrix(disorder.30day~., data = train.balanced)[, -varType]
+xtrain <- model.matrix(depression.30day~., data = train.balanced)[, -varType]
 
 #Try different lambda values
 set.seed(110)
@@ -1148,9 +1153,9 @@ lasso.fit <- glmnet(x = xtrain, y = ytrain, family = "binomial", nfolds = 5, alp
 #Plot Cross Validation for visualization
 plot(CV)
 
-lasso.fit.pred <- predict(lasso.fit, model.matrix(disorder.30day~., data = train.balanced)[, -1], type = "class")
+lasso.fit.pred <- predict(lasso.fit, model.matrix(depression.30day~., data = train.balanced)[, -1], type = "class")
 predictions <- as.data.frame(lasso.fit.pred) %>% rename("predicted" = s0)
-actual <- as.data.frame(train.balanced$disorder.30day) %>% rename("actual" = 'train.balanced$disorder.30day')
+actual <- as.data.frame(train.balanced$depression.30day) %>% rename("actual" = 'train.balanced$depression.30day')
 confusionMatrix <- as.data.frame(table(cbind(actual, predictions)))
 oobError <- 1 - sum(confusionMatrix[confusionMatrix$actual == confusionMatrix$predicted, confusionMatrix$actual == confusionMatrix$predicted]$Freq) /
   sum(confusionMatrix$Freq)
@@ -1160,7 +1165,7 @@ oobError
 
 #Use lasso to predict target using features from testOne
 toTest <- testOne ######################################################################################################MODIFY!
-features <- model.matrix(disorder.30day~., data = toTest)[, -varType]
+features <- model.matrix(depression.30day~., data = toTest)[, -varType]
 lasso.fit.pred <- predict(lasso.fit, features, type = "response")
 
 #Visualize logistic regression probabilities
@@ -1175,7 +1180,7 @@ for(i in as.integer(100*min(lasso.fit.pred)+1):as.integer(100*max(lasso.fit.pred
   threshold <- i/100
   lasso.fit.testPred <- ifelse(lasso.fit.pred > threshold, "0", "1")
   predictions <- as.data.frame(lasso.fit.testPred) %>% rename("predicted" = s0)
-  actual <- as.data.frame(toTest$disorder.30day) %>% rename("actual" = 'toTest$disorder.30day')
+  actual <- as.data.frame(toTest$depression.30day) %>% rename("actual" = 'toTest$depression.30day')
   confusionMatrix <- as.data.frame(table(cbind(actual, predictions)))
   thresholdTests[1,i] <- threshold
   thresholdTests[2,i] <- sum(confusionMatrix[confusionMatrix$actual == confusionMatrix$predicted, confusionMatrix$actual == confusionMatrix$predicted]$Freq) /
@@ -1212,7 +1217,7 @@ lasso.fit.pred <- ifelse(lasso.fit.pred > 0.48, "0", "1") ######################
 plot(lasso.fit.pred)
 
 predictions <- as.data.frame(lasso.fit.pred) %>% rename("predicted" = s0)
-actual <- as.data.frame(toTest$disorder.30day) %>% rename("actual" = 'toTest$disorder.30day')
+actual <- as.data.frame(toTest$depression.30day) %>% rename("actual" = 'toTest$depression.30day')
 confusionMatrix <- as.data.frame(table(cbind(actual, predictions)))
 mce <- 1 - sum(confusionMatrix[confusionMatrix$actual == confusionMatrix$predicted, confusionMatrix$actual == confusionMatrix$predicted]$Freq) /
   sum(confusionMatrix$Freq)
@@ -1238,11 +1243,11 @@ train <- readRDS("data/30dayTrain_imputed.Rda")
 testOne <- na.omit(readRDS("data/30dayTestOne_unimputed.Rda"))
 train <- train[,c(10, 1:9)]
 
-trainm <- sparse.model.matrix(disorder.30day~.-1, data = train)
-train_label <- train[,"disorder.30day"]
+trainm <- sparse.model.matrix(depression.30day~.-1, data = train)
+train_label <- train[,"depression.30day"]
 train_matrix <- xgb.DMatrix(data = as.matrix(trainm), label = train_label)
 
-testm <- trainm <- sparse.model.matrix(disorder.30day~.-1, data = testOne)
+testm <- trainm <- sparse.model.matrix(depression.30day~.-1, data = testOne)
 ```
 
 <h2>deep learning</h2>
