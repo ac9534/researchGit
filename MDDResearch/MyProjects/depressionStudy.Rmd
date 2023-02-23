@@ -1,0 +1,3118 @@
+---
+title: "Depression Study"
+author: "Alexander Chen"
+date: "7/25/2021"
+output: 
+  rmdformats::readthedown:
+    number_sections: T
+    code_folding: "hide"
+    fig_width: 12
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include = F}
+#Knit default settings
+knitr::opts_chunk$set(echo = T, fig.width=8, fig.height=4, warning = F)
+
+#Options
+options(scipen = 0, digits = 3)
+
+#Load required packages
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, RANN, e1071, data.table, lubridate, plyr, randomForest, caret, psych, rpart, rpart.plot, xgboost, ROSE, MLmetrics, plotROC, glmnet, plotly, haven, magrittr, Stat2Data, skimr, GGally, rmdformats, prettydoc, checkpoint, doSNOW, PRROC, missForest, mice, earth, kernlab, klaR, dplyr, kknn, vip, DT, devtools)
+# checkpoint("2021-03-15")
+# install.packages("DMwR")
+```
+
+# Abstract
+This study was inspired by the impacts of the COVID-19 pandemic, which saw an unprecedented rise in cases of mental illness. This study specifically focuses on Major Depressive Disorder. Using data from the 2001-2003 "Collaborative Psychiatric Epidemiology Surveys (CPES)", of which consists of 20,013 responses across all 50 States, we trained various machine learning models to predict whether or not a patient in America has had Major Depressive Disorder in the past month or past year, and additionally trained models to predict a patient's risk of Major Depressive Disorder during their lifetime, in all cases putting emphasis on positive predictions. This was done with the objective of creating a reliable model to assist medical professionals in identifying patients with Major Depressive Disorder using information that could be garnered from a survey. After training, our final models were unable to stand on their own in identifying Major Depressive Disorder, due to a low overall AUPRC. However, they were successful in improving upon a baseline random guess model, sometimes up to 300%. Consequently, we were still able to identify many significant factors correlated with increased risks of Major Depressive Disorder.
+
+# Introduction
+According to the DSM-5 (Diagnostic and Statistical Manual of Mental Disorders) developed by the American Psychiatric Association, an individual is classified as positive for Major Depressive Disorder when they are positive for at least five of the following symptoms: depressed mood, loss of pleasure, drastic weight change, insomnia or hypersomnia, psychomotor agitation or retardation, fatigue, feeling worthless, decreased concentration, and thoughts of death/suicide, of which present symptoms must interfere significantly with daily life. These symptoms must also not be attributed to psychotic disorder, a history of manic or hypomanic episodes, or substances. 
+
+Major Depressive Disorder can be devastating to the person suffering from it and their loved ones. Depression can make it difficult for people to find any energy or motivation to manage many simple aspects of daily life. From doing the dishes, cooking, doing the laundry, to even getting out of bed, depression can destroy a person's life. Patients can have overwhelming feelings of grief, sadness, and sense of guilt, a feeling often overall described as feeling empty and hopelessness. The Center for Suicide Prevention found that patients with Major Depressive Disorder had a 25 times greater risk of suicide (Center for Suicide Prevention, 2017). Strongly associated with physical well being, MDD often also causes headaches, and is associated with certain neurological diseases such as Alzheimer's disease, epilepsy, and multiple sclerosis. Problematically, patients suffering from Major Depressive Disorder are also prone to hiding their internal struggles, often hiding their emotions until it is too late (Pietrangelo, 2019). There have been reported cases of suicide where individuals have appeared perfectly happy to others for weeks before an attempt (White Wreath Association, 2016).
+
+In addition to the devastating symptoms of MDD suffered by the afflicted and their loved ones, MDD has a very real economic effect. According to 2019 data, approximately 6-7% of full-time U.S. workers experienced MDD in 2019 (American Psychiatric Association, 2020). The total economic burden of MDD was also estimated to be 210.5 billion per year. In 2015, MDD was affected an estimated 16 million Americans (SAMHSA, 2016), and, was the leading cause of disability worldwide (World Health Organization 2012).
+
+Fortunately, professional help has proven effective. For traditional treatments such as psychotherapy and antidepressant prescriptions, approximately 40% of patients with MDD achieve full remission within first or second-line treatment (Weiss and Wert, 2011), and novel treatments such as magnetic stimulation therapy developed by Stanford University have even achieved success rates of 90% in small studies (Erickson, 2020). Consequently, given the devastating impacts of MDD and the effectiveness of treatment, it is crucial that medical professionals know the significant predictors of MDD in patients, and optimally, be able to model depression with predictive models.
+
+This study aims to create predictive models to model the presence of Major Depressive Disorder in the past month, past year, and risk of MDD affliction at least once in an individual's lifetime given various traits and demographics. These models include Decision Trees, Random Forests, Multivariate Adaptive Regression Splines, RBF Support Vector Machines, and Gradient Boosted Trees. All analysis were performed using the R language.
+
+We use data from the 2001-2003 Collaborative Psychiatric Epidemiology Surveys, a data-set of a representative sample of the United States with 20,013 responses focused on mental illnesses (Alegria, 2016)
+
+```{r Load}
+cpes.raw <- as.data.frame(read_sav("data/20240-0001-Data.sav"))
+```
+
+# Data Cleaning
+
+## Recode & Factoring
+
+```{r Dataclean, eval = T}
+cpes.cleaned <- cpes.raw %>% rename(
+  "sex" = "V09036",
+  "age" = "V07306",
+  "region" = "V08992",
+  "maritalStatus" = "V08759",
+  "weightClass" = "V08823",
+  "height.inches" = "V06728",
+  "race" = "RANCEST",
+  "householdIncome" = "V08683",
+  "timesMarried" = "V09402",
+  "yearsOfEducation.respondent" = "V03085",
+  "parents.USBorn" = "V03125",
+  "yearsOfEducation.father" = "V03081",
+  "yearsOfEducation.mother" = "V03084",
+  "employment.initialAge" = "V09390",
+  "employment.current" = "V09154",
+  
+  #Adult Demographics
+  "homeless.historical" = "V05633",
+  "relativeWellOffRank.usPop" = "V05668",
+  "relativeWellOffRank.local" = "V05669",
+  "religiousAttendance.freq" = "V05629",
+  "motherAlive" = "V05672",
+  "motherDeath.respondentAge" = "V05674",
+  "fatherAlive" = "V05686",
+  "fatherDeath.respondentAge" = "V05689",
+  
+  #Childhood Demographics
+  "highschool.numAttended" = "V05732",
+  "districtHadMiddleSchool" = "V05733",
+  "gradeSchool.relativeAge" = "V05741",
+  "religiousImportance.childhood" = "V05713",
+  "familyHeadWorkTime.male" = "V05814",
+  "familyHeadWorkTime.female" = "V05820",
+  "neglect.insuffSupervision" = "V05836",
+  "neglect.dangerousChores" = "V05835",
+  "neglect.parentSpendOnSelf" = "V05837",
+  "neglect.hunger" = "V05838",
+  "neglect.insuffMedical" = "V05839",
+  "femaleCaretaker.closeness" = "V05841",
+  "femaleCaretaker.strictRules" = "V05845",
+  "femaleCaretaker.depression" = "V05846",
+  "femaleCaretaker.depression.hospitalized" = "V05850",
+  "femaleCaretaker.anxiety" = "V05852",
+  "femaleCaretaker.employmentDifficulty" = "V05865",
+  "femaleCaretaker.physicalFights" = "V05867",
+  "femaleCaretaker.crime" = "V05868",
+  "femaleCaretaker.suicideAttempt" = "V05871",
+  "maleCaretaker.closeness" = "V05874",
+  "maleCaretaker.strictRules" = "V05878",
+  "maleCaretaker.depression" = "V05879",
+  "maleCaretaker.depression.hospitalized" = "V05883",
+  "maleCaretaker.anxiety" = "V05885",
+  "maleCaretaker.employmentDifficulty" = "V05900",
+  "maleCaretaker.physicalFights" = "V05902",
+  "maleCaretaker.crime" = "V05903",
+  "maleCaretaker.suicideAttempt" = "V05906",
+  
+  #Temporal
+  "physicalHealth.30day" = "V04445",
+  "healthWorkAbsence.30day" = "V04452",
+  "difficultyConcentrating.30day" = "V04469",
+  "difficultyUnderstandingSituation.30day" = "V04470",
+  "difficutlyRemembering.30day" = "V04471",
+  "daysMobilityDifficult.30day" = "V04474",
+  "socialLifeDifficulty.30day" = "V04483",
+  "daysOvertime.30day" = "V05219",
+  "jobPerformance.30day" = "V05239",
+  
+  #Discrimination
+  "lessRespect.freq" = "V06539",
+  "nameCalled.freq" = "V06545",
+  "dislikedForRace" = "V06550",
+  
+  #Employment
+  "wksUnemployed.12month" = "V05162",
+  "workHrs.week" = "V05204",
+  
+  #Family Burden
+  "closeFamily.alive" = "V06280",
+  "closeRelative.cancer" = "V06282",
+  "closeRelative.seriousHeartProblem" = "V06290",
+  "closeRelative.seriousMemoryProblem" = "V06298",
+  "closeRelative.depression" = "V06344",
+  "closeRelative.anxiety" = "V06352",
+  
+  #Family Cohesion
+  "family.respectEachother" = "V06523",
+  "proudOfFamily" = "V06528",
+  "family.enjoyTogetherFreeTime" = "V06530",
+  "family.closenessHindersPersonalGoals" = "V06533",
+  "family.argueCustoms" = "V06534",
+  
+  #Finances
+  "finances.numberPplSupportingHousehold" = "V05315",
+  "afterLiquidationAndDebts.balance" = "V05312",
+  "financialNeedsMet" = "V05321",
+  "monthlyBillDifficulty" = "V05322",
+  "insuffFoodMoney.prevYear" = "V05325",
+  
+  #Gambling
+  "gamble.totalCount" = "V04950",
+  "gamble.ageFirstExposure" = "V04962",
+  
+  #Marriage
+  "marriage.divorceAnnulmentCount" = "V09403",
+  "marriage.regretMarriage" = "V05380",
+  "spouse.tooMuchAlcoholDrugs" = "V05406",
+  "spouse.jobDifficulty" = "V05415",
+  "spouse.financeDisagreement" = "V05373",
+  "spouse.lifePhilosophyDisagreement" = "V05376",
+  "spouse.majorDecisionDisagreement" = "V05377",
+  "spouse.quarrel" = "V05379",
+  
+  #Personality
+  "personality.transparentFeelings" = "V03232",
+  "personality.indecisiveAbtSelfPath" = "V03240",
+  "personality.feelBadWhenHurtAnother" = "V03243",
+  "personality.willLieToAchieveGoal" = "V03245",
+  "personality.takeRiskyChances" = "V03247",
+  "personality.argueWhenStopped" = "V03252",
+  "personality.letOthersMakeBigDecisions" = "V03255",
+  "personality.dislikeAlone" = "V03256",
+  "personality.askAdviceAbtEverydayDecisions" = "V03257",
+  "personality.sociallyAwkward" = "V03261",
+  "personality.preferSoloActivities" = "V03263",
+  "personality.easyToGetCloseToOthers" = "V05514",
+  
+  #Screening
+  "cigsPerDay" = "V04601",
+  
+  #Neighborhood
+  "neighborhood.trustworthy" = "V06497",
+  "neighborhood.nightSafety" = "V06501",
+  
+  #Social Networks
+  "freqTalkWithRelatives" = "V05501",
+  "freqArgueWithRelatives" = "V05505",
+  "freqFriendInteraction" = "V05506",
+  "freqTransparentPersonalProblems" = "V05513",
+  
+  ##DX: Major Depressive Disorder
+  "depression.lifetime" = "V07876",
+  "depression.12Month" = "V07655",
+  "depression.30day" = "V07657"
+)
+
+#Convert appropriate variables to factor
+cpes.cleaned %<>% mutate_at(
+  c("sex", "region", "maritalStatus","weightClass", "race", "employment.current", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day", "difficutlyRemembering.30day", "socialLifeDifficulty.30day", "afterLiquidationAndDebts.balance", "spouse.tooMuchAlcoholDrugs", "financialNeedsMet","monthlyBillDifficulty","insuffFoodMoney.prevYear", "spouse.jobDifficulty", "freqTalkWithRelatives", "freqArgueWithRelatives", "freqFriendInteraction", "freqTransparentPersonalProblems", "homeless.historical", "neighborhood.trustworthy", "neighborhood.nightSafety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime", "family.closenessHindersPersonalGoals", "family.argueCustoms", "lessRespect.freq", "nameCalled.freq", "dislikedForRace", "religiousAttendance.freq", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal", "personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions", "personality.sociallyAwkward", "personality.preferSoloActivities", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement", "spouse.quarrel", "marriage.regretMarriage", "personality.easyToGetCloseToOthers", "motherAlive", "fatherAlive", "districtHadMiddleSchool", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female", "neglect.dangerousChores", "neglect.insuffSupervision", "neglect.parentSpendOnSelf", "neglect.hunger", "neglect.insuffMedical", "femaleCaretaker.closeness", "femaleCaretaker.strictRules", "femaleCaretaker.depression", "femaleCaretaker.depression.hospitalized", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty", "femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules", "maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights", "maleCaretaker.crime", "maleCaretaker.suicideAttempt", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem", "closeRelative.depression", "closeRelative.anxiety", "depression.30day" ,"depression.12Month" ,"depression.lifetime"), as.factor)
+
+#Convert appropriate variables to numeric
+cpes.cleaned %<>% mutate_at(
+  c("age", "height.inches","householdIncome","timesMarried", "finances.numberPplSupportingHousehold", "wksUnemployed.12month", "marriage.divorceAnnulmentCount", "yearsOfEducation.respondent", "workHrs.week","cigsPerDay","gamble.totalCount", "gamble.ageFirstExposure", "daysOvertime.30day", "motherDeath.respondentAge", "fatherDeath.respondentAge","highschool.numAttended", "closeFamily.alive", "parents.USBorn", "yearsOfEducation.father","yearsOfEducation.mother","employment.initialAge", "jobPerformance.30day", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "relativeWellOffRank.usPop", "relativeWellOffRank.local"), as.numeric)
+
+cpes.cleaned$employment.current <- recode_factor(cpes.cleaned$employment.current, '1' = "Employed", '2' = "Unemployed", '3' = "Not In Labor Force")
+cpes.cleaned$physicalHealth.30day <- recode_factor(cpes.cleaned$physicalHealth.30day, '1' = "Better", '2' = "Worse", '3' = "About The Same")
+cpes.cleaned$homeless.historical <- recode_factor(cpes.cleaned$homeless.historical, '1' = "Yes", '5' = "No")
+cpes.cleaned$difficultyConcentrating.30day <- recode_factor(cpes.cleaned$difficultyConcentrating.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cpes.cleaned$difficultyUnderstandingSituation.30day <- recode_factor(cpes.cleaned$difficultyUnderstandingSituation.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cpes.cleaned$difficutlyRemembering.30day <- recode_factor(cpes.cleaned$difficutlyRemembering.30day, '1' = "None", '2' = "Mild", '3' = "Moderate", '4' = "Severe", '5' = "Impossible")
+cpes.cleaned$socialLifeDifficulty.30day <- recode_factor(cpes.cleaned$socialLifeDifficulty.30day, '1' = "Yes", '5' = "No")
+cpes.cleaned$afterLiquidationAndDebts.balance <- recode_factor(cpes.cleaned$afterLiquidationAndDebts.balance, '1' = "Money Left", '2' = "Owe Money", '3' = "Debts Equal Assets", '4' = "Don't Owe Anything")
+cpes.cleaned$financialNeedsMet <- recode_factor(cpes.cleaned$financialNeedsMet, '1' = "More Than Need", '2' = "Just Enough", '3' = "Not Enough")
+cpes.cleaned$monthlyBillDifficulty <- recode_factor(cpes.cleaned$monthlyBillDifficulty, '1' = "Very Difficult", '2' = "Somewhat Difficult", '3' = "Not Very Difficult", '4' = "Not At All Difficult")
+cpes.cleaned$insuffFoodMoney.prevYear <- recode_factor(cpes.cleaned$insuffFoodMoney.prevYear, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$spouse.tooMuchAlcoholDrugs <- recode_factor(cpes.cleaned$spouse.tooMuchAlcoholDrugs, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$spouse.jobDifficulty <- recode_factor(cpes.cleaned$spouse.jobDifficulty, '1' = "Yes", '5' = "No", '7' = "Does Not Apply/Spouse Never Worked")
+cpes.cleaned$freqTalkWithRelatives <- recode_factor(cpes.cleaned$freqTalkWithRelatives, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
+cpes.cleaned$freqArgueWithRelatives <- recode_factor(cpes.cleaned$freqArgueWithRelatives, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$freqFriendInteraction <- recode_factor(cpes.cleaned$freqFriendInteraction, '1' = "Most Every Day", '2' = "A Few Times A Week", '3' = "A Few Times A Month", '4' = "Once A Month", '5' = "Less Than Once A Month")
+cpes.cleaned$freqTransparentPersonalProblems <- recode_factor(cpes.cleaned$freqTransparentPersonalProblems, '1' = "Always", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$freqTransparentPersonalProblems <- recode_factor(cpes.cleaned$freqTransparentPersonalProblems, '1' = "Yes", '2' = "No")
+cpes.cleaned$neighborhood.trustworthy <- recode_factor(cpes.cleaned$neighborhood.trustworthy, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
+cpes.cleaned$neighborhood.nightSafety <- recode_factor(cpes.cleaned$neighborhood.nightSafety, '1' = "Very True", '2' = "Somewhat True", '3' = "Not Very True", '4' = "Not At All True")
+cpes.cleaned$family.respectEachother <- recode_factor(cpes.cleaned$family.respectEachother, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$proudOfFamily <- recode_factor(cpes.cleaned$proudOfFamily, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$family.enjoyTogetherFreeTime <- recode_factor(cpes.cleaned$family.enjoyTogetherFreeTime, '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$family.closenessHindersPersonalGoals <- recode_factor(cpes.cleaned$family.closenessHindersPersonalGoals, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
+cpes.cleaned$family.argueCustoms <- recode_factor(cpes.cleaned$family.argueCustoms, '1' = "Hardly Ever/Never", '2' = "Sometimes", '3' = "Often")
+cpes.cleaned$lessRespect.freq <- recode_factor(cpes.cleaned$lessRespect.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
+cpes.cleaned$nameCalled.freq <- recode_factor(cpes.cleaned$nameCalled.freq, '1' = "Almost Every Day", '2' = "At Least Once A Week", '3' = "A Few Times A Month", '4' = "A Few Times A Year", '5' = "Less Than Once A Year", '6' = "Never")
+cpes.cleaned$dislikedForRace <- recode_factor(cpes.cleaned$dislikedForRace, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$sex <- recode_factor(cpes.cleaned$sex, '1' = "Male", '2' = "Female")
+cpes.cleaned$region <- recode_factor(cpes.cleaned$region, '1' = "Northeast", '2' = "Midwest", '3' = "South", '4' = "West")
+cpes.cleaned$maritalStatus <- recode_factor(cpes.cleaned$maritalStatus, '1' = "Married/Cohabiting", '2' = "Divorced/Separated/Widowed", '3' = "Never Married")
+cpes.cleaned$religiousAttendance.freq <- recode_factor(cpes.cleaned$religiousAttendance.freq, '1' = "More Than Once A Week", '2' = "About Once A Week", '3' = "One To Three Times A Month", '4' = "Less Than Once A Month", '5' = "Never")
+cpes.cleaned$weightClass <- recode_factor(cpes.cleaned$weightClass, '1' = "Underweight", '2' = "Healthy", '3' = "Overweight", '4' = "Obesity Class 1", '5' = "Obesity Class 2", '5' = "Obesity Class 3")
+cpes.cleaned$race <- recode_factor(cpes.cleaned$race, '1' = "Vietnamese", '2' = "Filipino", '3' = "Chinese", '4' = "All Other Asian", '5' = "Cuban", '6' = "PuertoRican", '7' = "Mexican", '8' = "All Other Hispanic", '9' = "Afro-Carribean", '10' = "African American", '11' = "Non-Hispanic Whites", '12' = "All Other")
+cpes.cleaned$personality.transparentFeelings <- recode_factor(cpes.cleaned$personality.transparentFeelings, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.indecisiveAbtSelfPath <- recode_factor(cpes.cleaned$personality.indecisiveAbtSelfPath, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.feelBadWhenHurtAnother <- recode_factor(cpes.cleaned$personality.feelBadWhenHurtAnother, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.willLieToAchieveGoal <- recode_factor(cpes.cleaned$personality.willLieToAchieveGoal, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.takeRiskyChances <- recode_factor(cpes.cleaned$personality.takeRiskyChances, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.letOthersMakeBigDecisions <- recode_factor(cpes.cleaned$personality.letOthersMakeBigDecisions, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.argueWhenStopped <- recode_factor(cpes.cleaned$personality.argueWhenStopped, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.dislikeAlone <- recode_factor(cpes.cleaned$personality.dislikeAlone, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.askAdviceAbtEverydayDecisions <- recode_factor(cpes.cleaned$personality.askAdviceAbtEverydayDecisions, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.sociallyAwkward <- recode_factor(cpes.cleaned$personality.sociallyAwkward, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$personality.preferSoloActivities <- recode_factor(cpes.cleaned$personality.preferSoloActivities, '1' = "TRUE", '5' = "FALSE")
+cpes.cleaned$spouse.financeDisagreement <- recode_factor(cpes.cleaned$spouse.financeDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$spouse.lifePhilosophyDisagreement <- recode_factor(cpes.cleaned$spouse.lifePhilosophyDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$spouse.quarrel <- recode_factor(cpes.cleaned$spouse.quarrel, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$spouse.majorDecisionDisagreement <- recode_factor(cpes.cleaned$spouse.majorDecisionDisagreement, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$marriage.regretMarriage <- recode_factor(cpes.cleaned$marriage.regretMarriage, '1' = "All Of The Time", '2' = "Most Of The Time", '3' = "Sometimes", '4' = "Rarely", '5' = "Never")
+cpes.cleaned$personality.easyToGetCloseToOthers <- recode_factor(cpes.cleaned$personality.easyToGetCloseToOthers,  '1' = "Strongly Agree", '2' = "Somewhat Agree", '3' = "Somewhat Disagree", '4' = "Strongly Disagree")
+cpes.cleaned$motherAlive <- recode_factor(cpes.cleaned$motherAlive, '1' = "Yes", '5' = "No")
+cpes.cleaned$fatherAlive <- recode_factor(cpes.cleaned$fatherAlive, '1' = "Yes", '5' = "No")
+cpes.cleaned$gradeSchool.relativeAge <- recode_factor(cpes.cleaned$gradeSchool.relativeAge, '1' = "Younger", '2' = "Older", '3' = "Average", '4' = "Varied")
+cpes.cleaned$districtHadMiddleSchool <- recode_factor(cpes.cleaned$districtHadMiddleSchool, '1' = "Yes", '5' = "No")
+cpes.cleaned$religiousImportance.childhood <- recode_factor(cpes.cleaned$religiousImportance.childhood, '1' = "Very Important", '2' = "Somewhat Important", '3' = "Not Very Important", '4' = "Not At All Important")
+cpes.cleaned$familyHeadWorkTime.female <- recode_factor(cpes.cleaned$familyHeadWorkTime.female, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
+cpes.cleaned$familyHeadWorkTime.male <- recode_factor(cpes.cleaned$familyHeadWorkTime.male, '1' = "All", '2' = "Most", '3' = "Some", '4' = "A Little", '5' = "Not At All")
+cpes.cleaned$neglect.insuffSupervision <- recode_factor(cpes.cleaned$neglect.insuffSupervision, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.parentSpendOnSelf <- recode_factor(cpes.cleaned$neglect.parentSpendOnSelf, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.dangerousChores <- recode_factor(cpes.cleaned$neglect.dangerousChores, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.hunger <- recode_factor(cpes.cleaned$neglect.hunger, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$neglect.insuffMedical <- recode_factor(cpes.cleaned$neglect.insuffMedical, '1' = "Often", '2' = "Sometimes", '3' = "Rarely", '4' = "Never")
+cpes.cleaned$femaleCaretaker.closeness <- recode_factor(cpes.cleaned$femaleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
+cpes.cleaned$femaleCaretaker.strictRules <- recode_factor(cpes.cleaned$femaleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
+cpes.cleaned$femaleCaretaker.depression.hospitalized <- recode_factor(cpes.cleaned$femaleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.depression <- recode_factor(cpes.cleaned$femaleCaretaker.depression, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.anxiety <- recode_factor(cpes.cleaned$femaleCaretaker.anxiety, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.physicalFights <- recode_factor(cpes.cleaned$femaleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.crime <- recode_factor(cpes.cleaned$femaleCaretaker.crime, '1' = "Yes", '5' = "No")
+cpes.cleaned$femaleCaretaker.employmentDifficulty <- recode_factor(cpes.cleaned$femaleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.closeness <- recode_factor(cpes.cleaned$maleCaretaker.closeness, '1' = "Very Close", '2' = "Somewhat Close", '3' = "Not Very Close", '4' = "Not At All Close")
+cpes.cleaned$femaleCaretaker.suicideAttempt <- recode_factor(cpes.cleaned$femaleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.strictRules <- recode_factor(cpes.cleaned$maleCaretaker.strictRules, '1' = "A Lot", '2' = "Some", '3' = "A Little", '4' = "Not At All")
+cpes.cleaned$maleCaretaker.depression.hospitalized <- recode_factor(cpes.cleaned$maleCaretaker.depression.hospitalized, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.depression <- recode_factor(cpes.cleaned$maleCaretaker.depression, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.anxiety <- recode_factor(cpes.cleaned$maleCaretaker.anxiety, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.employmentDifficulty <- recode_factor(cpes.cleaned$maleCaretaker.employmentDifficulty, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.physicalFights <- recode_factor(cpes.cleaned$maleCaretaker.physicalFights, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.crime <- recode_factor(cpes.cleaned$maleCaretaker.crime, '1' = "Yes", '5' = "No")
+cpes.cleaned$maleCaretaker.suicideAttempt <- recode_factor(cpes.cleaned$maleCaretaker.suicideAttempt, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.cancer <- recode_factor(cpes.cleaned$closeRelative.cancer, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.seriousHeartProblem <- recode_factor(cpes.cleaned$closeRelative.seriousHeartProblem, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.seriousMemoryProblem <- recode_factor(cpes.cleaned$closeRelative.seriousMemoryProblem, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.depression <- recode_factor(cpes.cleaned$closeRelative.depression, '1' = "Yes", '5' = "No")
+cpes.cleaned$closeRelative.anxiety <- recode_factor(cpes.cleaned$closeRelative.anxiety, '1' = "Yes", '5' = "No")
+```
+
+Due to over 5,000 predictors in the raw data set, variable names were coded (ie. V09036). Our first step was to select our relevant variables and rename them for use in our cleaned data set. Variable documentation available for download from the same page we retrieved our raw data from.
+
+Additionally, categorical and continuous variables were converted to factors and doubles respectively. Factor levels of categorical variables were also renamed appropriately.
+
+## Modify or remove extraneous data
+
+```{r extraneous data removal, eval = T}
+if("SESTRAT" %in% names(cpes.cleaned)){
+  cpes.cleaned <- cpes.cleaned %>% dplyr::select(-starts_with("V") & -starts_with("NC") & -starts_with("NS") & -starts_with("NL") & -starts_with("CPES") & -c("SESTRAT", "SECLUSTR"))
+}
+cpes.cleaned$householdIncome[cpes.cleaned$householdIncome < 10000] <- NA
+cpes.cleaned$parents.USBorn <- cpes.cleaned$parents.USBorn - rep(1, nrow(cpes.cleaned))
+cpes.cleaned$employment.initialAge[cpes.cleaned$employment.initialAge > cpes.cleaned$age] <- NA
+cpes.cleaned$fatherDeath.respondentAge[cpes.cleaned$fatherDeath.respondentAge > cpes.cleaned$age] <- NA
+cpes.cleaned$motherDeath.respondentAge[cpes.cleaned$motherDeath.respondentAge > cpes.cleaned$age] <- NA
+cpes.cleaned$closeFamily.alive[cpes.cleaned$closeFamily.alive > 25] <- NA
+```
+
+ * Annual household incomes below 10,000 are removed, as there is high likelihood they are typos.
+ * US Born Parent variable values mutated to be one less than their original value so numeric values align with number of US born parents.
+ * Initial employment age, age at mother's death, and age at father's death are removed if the value is greater than current age.
+ * Alive close family values above 25 are removed. Respondents likely did not interpret close family as commonly accepted.
+
+## Cleaned Data-set Overview
+
+Overview of cleaned data-set. Contains variable documentation and pairwise plot of numerical variables. Click in search boxes to view factor levels.
+
+```{r Overview}
+datatable(cpes.cleaned[,2:115], filter = "top", options = list(pageLength = 5, scrollX = T))
+# htmlwidgets::saveWidget(file = "data/cleanDatWidget.html", datatable(cpes.cleaned[,2:115], filter = "top", options = list(pageLength = 5, scrollX = T)))
+```
+
+### Variable Documentation
+
+```{r Variable Documentation}
+varDocuCat <- as.data.frame(matrix("Empty", nrow = 36, ncol = 5))
+colnames(varDocuCat) <- NULL
+
+varDocuCat[1,1:5] <- c("depression.30day", "depression.12Month", "depression.lifetime", "sex", "region")
+varDocuCat[2,1:5] <- c("Patient positive for MDD within last 30 days", "Patient positive for MDD within last year", "Patient positive for MDD at least once during lifetime", "Male or Female", "US Census 4 regions")
+varDocuCat[3,1:5] <- c("maritalStatus", "weightClass", "race", "employment.current", "afterLiquidationAndDebts.balance")
+varDocuCat[4,1:5] <- c("Married/Cohabiting, Separated, Never Married", "Weight Classification based on BMI", "race", "Employment situation", "Self assessed financial stability after debts and liquidation")
+varDocuCat[5,1:5] <- c("spouse.tooMuchAlcoholDrugs", "freqArgueWithRelatives", "financialNeedsMet", "monthlyBillDifficulty", "insuffFoodMoney.prevYear")
+varDocuCat[6,1:5] <- c("Does the spouse do too much drugs or alcohol", "frequency arguing with relatives", "self assessed general financial stability for the past year", "monthly difficulty paying bills for the past year", "frequency without sufficient finances to afford food during the past year")
+varDocuCat[7,1:5] <- c("freqFriendInteraction", "spouse.jobDifficulty", "freqTalkWithRelatives", "freqTransparentPersonalProblems", "homeless.historical")
+varDocuCat[8,1:5] <- c("frequency interact with friends during past year", "whether or not spouse suffers finding/keeping a job", "frequency talking with relatives", "frequency reveal personal problems to close family and friends", "if respondent has ever been homeless")
+varDocuCat[9,1:5] <- c("neighborhood.trustworthy", "neighborhood.nightSafety", "family.respectEachother", "proudOfFamily", "family.enjoyTogetherFreeTime")
+varDocuCat[10,1:5] <- c("Self assessed neighborhood trustworthyness", "Self assessed neighborhood safety at night", "Degree to which family members respect eachother", "Degree to which respondent enjoys free time with family", "How much respondent family enjoys time together")
+varDocuCat[11,1:5] <- c("family.closenessHindersPersonalGoals", "lessRespect.freq", "family.argueCustoms", "nameCalled.freq", "dislikedForRace")
+varDocuCat[12,1:5] <- c("Does family get in the way of personal goals?", "Frequency respondent receives less respect compared to peers", "Degree to which family argues about traditions", "frequency name called", "frequency disliked due to race")
+varDocuCat[13,1:5] <- c("religiousAttendance.freq", "personality.transparentFeelings", "personality.indecisiveAbtSelfPath", "personality.feelBadWhenHurtAnother", "personality.willLieToAchieveGoal")
+varDocuCat[14,1:5] <- c("frequency of attending religious events", "personality often transparent with personal feelings", "respondent generally indecisive about their future", "respondent feels bad when hurting another (physical or mental)", "whether or not respondent will lie to achieve goals")
+varDocuCat[15,1:5] <- c("personality.takeRiskyChances", "personality.argueWhenStopped", "personality.letOthersMakeBigDecisions", "personality.dislikeAlone", "personality.askAdviceAbtEverydayDecisions")
+varDocuCat[16,1:5] <- c("aptitude to take risks", "degree to which one will argue when confronted", "are big decisions made by others?", "whether or not respondent dislikes being alone", "does the respondent often consult others for basic tasks")
+varDocuCat[17,1:5] <- c("personality.sociallyAwkward", "personality.preferSoloActivities", "spouse.financeDisagreement", "spouse.lifePhilosophyDisagreement", "spouse.majorDecisionDisagreement")
+varDocuCat[18,1:5] <- c("self assessed social awkwardness", "does the respondent prefer solo activities", "degree to which respondent argues with spouse on finances", "degree to which respondent argues with spouse on philosophy", "degree to which respondent argues with spouse on major decisions")
+varDocuCat[19,1:5] <- c("spouse.quarrel", "marriage.regretMarriage", "personality.easyToGetCloseToOthers", "motherAlive", "fatherAlive")
+varDocuCat[20,1:5] <- c("frequency quarreling with spouse", "frequency regretting marriage", "respondent finds it easy to establish relationships", "is the mother currently alive?", "is the father currently alive?")
+varDocuCat[21,1:5] <- c("districtHadMiddleSchool", "gradeSchool.relativeAge", "religiousImportance.childhood", "familyHeadWorkTime.male", "familyHeadWorkTime.female")
+varDocuCat[22,1:5] <- c("school district had middle school", "relative age compared to peers in grade school", "childhood importance of religion", "time spent by male head working", "time spent by female head working")
+varDocuCat[23,1:5] <- c("neglect.dangerousChores", "neglect.insuffSupervision", "neglect.parentSpendOnSelf", "neglect.insuffMedical", "femaleCaretaker.closeness")
+varDocuCat[24,1:5] <- c("frequency ordered to do dangerous chores as child", "frequency unsupervised as child", "frequency child ignored due to parent's own financial indulgences", "frequency child recieved insufficient medical care", "childhood closeness with female caretaker")
+varDocuCat[25,1:5] <- c("neglect.hunger", "femaleCaretaker.depression", "femaleCaretaker.depression.hospitalized", "femaleCaretaker.anxiety", "femaleCaretaker.employmentDifficulty")
+varDocuCat[26,1:5] <- c("frequency insufficient food as child", "did female caretaker have depresssion?", "did female taker get hospitalized for depression?", "did female caretaker have anxiety?", "did female caretaker have employment difficulty?")
+varDocuCat[27,1:5] <- c("femaleCaretaker.physicalFights", "femaleCaretaker.crime", "femaleCaretaker.suicideAttempt", "maleCaretaker.closeness", "maleCaretaker.strictRules")
+varDocuCat[28,1:5] <- c("freq female caretaker got in physical fights", "freq female caretaker engaged in crime", "freq female caretaker attempted suicide", "childhood closeness with male caretaker", "childhood did male caretaker have strict rules")
+varDocuCat[29,1:5] <- c("maleCaretaker.depression", "maleCaretaker.depression.hospitalized", "maleCaretaker.anxiety", "maleCaretaker.employmentDifficulty", "maleCaretaker.physicalFights")
+varDocuCat[30,1:5] <- c("did male caretaker have depression?", "did male caretaker get hospitalized for depression?", "did male caretaker have anxiety", "did male caretaker have employment difficulty", "did male caretaker get in physical fights")
+varDocuCat[31,1:5] <- c("maleCaretaker.crime", "maleCaretaker.suicideAttempt", "closeRelative.cancer", "closeRelative.seriousHeartProblem", "closeRelative.seriousMemoryProblem")
+varDocuCat[32,1:5] <- c("freq male caretaker engage in crime", "freq male caretaker attempted suicide", "past year close relative had cancer?", "past year close relative had serious heart issue?", "past year close relative had serious memory issue?")
+varDocuCat[33,1:5] <- c("closeRelative.depression", "closeRelative.anxiety", "physicalHealth.30day", "difficultyConcentrating.30day", "difficultyUnderstandingSituation.30day")
+varDocuCat[34,1:5] <- c("past year close relative had depression?", "past year close relative had anxiety?", "30 day self assesed physical health", "30 day self assessed difficulty concentrating", "30 day difficulty understanding situation")
+varDocuCat[35,1:5] <- c("difficutlyRemembering.30day", "socialLifeDifficulty.30day", "NA", "NA", "NA")
+varDocuCat[36,1:5] <- c("30 day memory self assessment", "30 day self assessed social difficulty", "No Description", "No Description", "No Description")
+
+varDocuCont <- as.data.frame(matrix("Empty", nrow = 12, ncol = 5))
+colnames(varDocuCont) <- NULL
+
+varDocuCont[1,1:5] <- c("age", "height.inches", "householdIncome", "timesMarried", "finances.numberPplSupportingHousehold")
+varDocuCont[2,1:5] <- c("age", "height in inches", "annual household income last year", "times married", "number of financial contributors in household")
+varDocuCont[3,1:5] <- c("wksUnemployed.12month", "marriage.divorceAnnulmentCount", "yearsOfEducation.respondent", "workHrs.week", "cigsPerDay")
+varDocuCont[4,1:5] <- c("past year number of weeks unemployed", "number of times divorced/annulled", "years of education", "average hours worked every week", "past year average number of cigarettes smoked per day")
+varDocuCont[5,1:5] <- c("gamble.totalCount", "gamble.ageFirstExposure", "daysOvertime.30day", "motherDeath.respondentAge", "fatherDeath.respondentAge")
+varDocuCont[6,1:5] <- c("total times gambled", "first age exposed to gambling (either self or parent)", "past 30 days worked overtime", "age when mother died", "age when father died")
+varDocuCont[7,1:5] <- c("highschool.numAttended", "closeFamily.alive", "parents.USBorn", "yearsOfEducation.father", "yearsOfEducation.mother")
+varDocuCont[8,1:5] <- c("number of highschools attended", "number of close family members alive (parents, siblings, spouse, children, grandparents and grandchildren)", "Number of parents US native", "father's years of education completed", "mother's years of education completed")
+varDocuCont[9,1:5] <- c("employment.initialAge", "jobPerformance.30day", "healthWorkAbsence.30day", "daysMobilityDifficult.30day", "relativeWellOffRank.usPop")
+varDocuCont[10,1:5] <- c("initial age employed for over 6 months", "past 30 day self assessed job performance 1 to 10 scale", "past 30 day days absent due to health", "past 30 day days where mobility was difficult", "self assessed prosperity 1 to 10 score compared to US population")
+varDocuCont[11,1:5] <- c("relativeWellOffRank.local", "NA", "NA", "NA", "NA")
+varDocuCont[12,1:5] <- c("self assessed prosperity 1 to 10 score compared to community", "No Description", "No Description", "No Description", "No Description")
+
+datatable(varDocuCat, 
+          caption = "Categorical Variables (Var Name on Gray Lines, Description Immediately Below on White Lines)",
+          rownames = FALSE, filter="top", 
+          options = list(pageLength = 20, scrollX=T, ordering = F))
+datatable(varDocuCont, 
+          caption = "Continuous Variables (Var Name on Gray Lines, Description Immediately Below on White Lines)",
+          rownames = FALSE, filter="top", 
+          options = list(pageLength = 20, scrollX=T, ordering = F))
+
+# htmlwidgets::saveWidget(file = "data/docuCatWidget.html", datatable(varDocuCat, 
+#           caption = "Categorical Variables (Var Name on Gray Lines, Description Immediately Below on White Lines)",
+#           rownames = FALSE, filter="top", 
+#           options = list(pageLength = 20, scrollX=T, ordering = F)))
+#   
+# htmlwidgets::saveWidget(file = "data/docuContWidget.html", datatable(varDocuCont, 
+#           caption = "Continuous Variables (Var Name on Gray Lines, Description Immediately Below on White Lines)",
+#           rownames = FALSE, filter="top", 
+#           options = list(pageLength = 20, scrollX=T, ordering = F)))
+```
+
+### Pairwise Plot of Numerical Vars
+
+```{r pairwise plot, fig.height=50, fig.width=50, warning = F}
+# ggpairs(cpes.cleaned[,sapply(cpes.cleaned, is.numeric)])
+```
+
+# Exploratory Data Analysis
+In our EDA, we look at surface level trends between common demographics data vs. depression rate: region, sex, age, race, income, employment, and education.
+
+The appropriate depression rate depends on the variable. For example, lifetime risk of suffering from MDD (depression.lifetime) would be used for sex, as the variable is time independent. Other time independent variables include region, sex, and race. Time dependent variables such as age, income, and employment are compared against depression rate calculated according to whether or not a patient has been positive for MDD within the past year (depression.12Month).
+
+## Region
+
+```{r EDA: Region}
+region_depression.lifetime <- dplyr :: select(cpes.cleaned, c("region", "depression.lifetime"))
+
+region_Pop <- as.data.frame(table(region_depression.lifetime[,"region"])) %>%
+  rename(region = Var1) %>%
+  rename("population" = Freq)
+
+uniqueRegions <- length(unique(region_depression.lifetime$region))
+region_depressionPop.lifetime <- as.data.frame(
+  table(region_depression.lifetime[region_depression.lifetime$depression.lifetime == '1',]))[1:uniqueRegions,] %>%
+  rename("endorsed" = Freq)
+
+region_depression.lifetime <- cbind(region_Pop, region_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "region_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
+
+region_depression.lifetime <- region_depression.lifetime[region_depression.lifetime$population >= 30,]
+
+region_depression.lifetime$region <- factor(region_depression.lifetime$region,
+                                           levels = unique(region_depression.lifetime$region)
+                                           [order(region_depression.lifetime$rate, decreasing = F)])
+
+regionDist.plot <- plot_ly(region_depression.lifetime, x = ~region, y = ~population, type = 'bar') %>%
+  layout(title = "Population by Region", xaxis = list(title = "Region"), yaxis = list(title = "Population", range = c(0, 8000)))
+
+region_depression.lifetime.plot <- plot_ly(region_depression.lifetime, x = ~region, y = ~rate, type = 'bar') %>%
+  layout(title = "% Diagnosed with MDD by region (Lifetime)", xaxis = list(title = "Region"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+
+annotations = list(
+  list(
+    x = 0.2,
+    y = 1.0,
+    text = "Population by Region",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  ),
+  list(
+    x = 0.75,
+    y = 1,
+    text = "Depression Rate (Lifetime) by Region",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  )
+)
+
+plotly::subplot(regionDist.plot, region_depression.lifetime.plot) %>%
+  layout(annotations = annotations, title = F, showlegend = F)
+
+chisq <- table(cpes.cleaned$region, cpes.cleaned$depression.lifetime)
+chisq.test(chisq)
+```
+
+While the South appears over-represented, this sample is nationally representative, with census data indicating the South to be approximately twice as populous as the average of the other regions.
+
+Our second graph and chi-square results also suggest that a statistically significant relationship exists between region and depression rate (lifetime risk).
+
+## Gender
+
+```{r eda Sex}
+sex_depression.lifetime <- dplyr :: select(cpes.cleaned, c("sex", "depression.lifetime"))
+
+sex_Pop <- as.data.frame(table(sex_depression.lifetime[,"sex"])) %>%
+  rename(sex = Var1) %>%
+  rename("population" = Freq)
+
+uniqueSexes <- length(unique(sex_depression.lifetime$sex))
+sex_depressionPop.lifetime <- as.data.frame(
+  table(sex_depression.lifetime[sex_depression.lifetime$depression.lifetime == '1',]))[1:uniqueSexes,] %>%
+  rename("endorsed" = Freq)
+
+sex_depression.lifetime <- cbind(sex_Pop, sex_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "sex_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
+
+sex_depression.lifetime <- sex_depression.lifetime[sex_depression.lifetime$population >= 30,]
+
+sex_depression.lifetime$sex <- factor(sex_depression.lifetime$sex,
+                                           levels = unique(sex_depression.lifetime$sex)
+                                           [order(sex_depression.lifetime$rate, decreasing = F)])
+
+sexDist.plot <- plot_ly(sex_depression.lifetime, x = ~sex, y = ~population, type = 'bar') %>%
+  layout(title = "Population by Sex", xaxis = list(title = "Sex"), yaxis = list(title = "Population", range = c(0, 13000)))
+
+sex_depression.lifetime.plot <- plot_ly(sex_depression.lifetime, x = ~sex, y = ~rate, type = 'bar') %>%
+  layout(title = "% Diagnosed with MDD by Sex (Lifetime)", xaxis = list(title = "Sex"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+
+annotations = list(
+  list(
+    x = 0.2,
+    y = 1.0,
+    text = "Population by Sex",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  ),
+  list(
+    x = 0.75,
+    y = 1,
+    text = "Depression Rate (Lifetime) by Sex",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  )
+)
+
+plotly::subplot(sexDist.plot, sex_depression.lifetime.plot) %>%
+  layout(annotations = annotations, title = F, showlegend = F)
+
+chisq <- table(cpes.cleaned$sex, cpes.cleaned$depression.lifetime)
+chisq.test(chisq)
+```
+
+Females are over-represented in the sample. For reference, general census data indicates an about 1:1 ratio between males and females. This could pose a potential limitation. However, with estimating male and female depression rates, with over 8k samples in each category, proportion estimates can be assumed accurate.
+
+Our second graph and chi-square results suggest that a statistically significant relationship exists between sex and depression rate (lifetime risk). Females are at higher risk. This aligns with general academic consensus.
+
+## Age
+
+```{r eda Age}
+age_depression.12Month <- dplyr :: select(cpes.cleaned, c("age", "depression.12Month"))
+
+age_Pop <- as.data.frame(table(age_depression.12Month[,"age"])) %>%
+  rename(age = Var1) %>%
+  rename("population" = Freq)
+
+uniqueAges <- length(unique(age_depression.12Month$age))
+age_depressionPop.12Month <- as.data.frame(
+  table(age_depression.12Month[age_depression.12Month$depression.12Month == '1',]))[1:uniqueAges,] %>%
+  rename("endorsed" = Freq)
+
+age_depression.12Month <- cbind(age_Pop, age_depressionPop.12Month$endorsed) %>% rename("endorsed" = "age_depressionPop.12Month$endorsed") %>% mutate(rate = endorsed / population)
+
+ageDist.plot <- plot_ly(age_depression.12Month, x = ~age, y = ~population, type = 'bar') %>%
+  layout(title = "Population by Age", xaxis = list(title = "Age"), yaxis = list(title = "Population", range = c(0, 500)))
+
+age_depression.12Month <- age_depression.12Month[age_depression.12Month$population >= 30,]
+age_depression.12Month %<>% mutate_at(c("age"), as.numeric)
+age_depression.12Month <- mutate(age_depression.12Month, age = age + 17)
+age_depression.12Month.fit <- lm(rate~age, data = age_depression.12Month)
+
+age_depression.12Month.plot <- plot_ly(age_depression.12Month, x = ~age, y = ~rate, type = 'scatter', mode = 'markers') %>%
+  layout(title = "% Positive for MDD by Age (12Month)",
+         xaxis = list(title = "Age"),
+         yaxis = list(title = "% Positive for MDD (12Month)", range = c(0,0.25))) %>%
+  add_trace(x = ~age, y = fitted(age_depression.12Month.fit), mode = 'lines')
+
+annotations = list(
+  list(
+    x = 0.2,
+    y = 1.0,
+    text = "Population by Age",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  ),
+  list(
+    x = 0.75,
+    y = 1,
+    text = "Depression Rate (12 Month) by Age",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  )
+)
+
+plotly::subplot(ageDist.plot, age_depression.12Month.plot) %>%
+  layout(annotations = annotations, title = F, showlegend = F)
+
+summary(age_depression.12Month.fit)
+```
+
+Sample age distribution matches that of the general United States.
+
+Linear model indicates a statistically significant relationship between age and depression rate (Past year). Depression rate appears to decrease as age increases. Coefficient: -0.000983
+
+Note: With less than 30 observations, ages from 87 to 99 were excluded.
+
+## Race
+
+```{r eda Race}
+race_depression.lifetime <- dplyr :: select(cpes.cleaned, c("race", "depression.lifetime"))
+
+race_Pop <- as.data.frame(table(race_depression.lifetime[,"race"])) %>%
+  rename(race = Var1) %>%
+  rename("population" = Freq)
+
+uniqueraces <- length(unique(race_depression.lifetime$race))
+race_depressionPop.lifetime <- as.data.frame(
+  table(race_depression.lifetime[race_depression.lifetime$depression.lifetime == '1',]))[1:uniqueraces,] %>%
+  rename("endorsed" = Freq)
+
+race_depression.lifetime <- cbind(race_Pop, race_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "race_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
+
+race_depression.lifetime <- race_depression.lifetime[race_depression.lifetime$population >= 30,]
+
+race_depression.lifetime$race <- factor(race_depression.lifetime$race,
+                                           levels = unique(race_depression.lifetime$race)
+                                           [order(race_depression.lifetime$rate, decreasing = F)])
+
+raceDist.plot <- plot_ly(race_depression.lifetime, x = ~race, y = ~population, type = 'bar') %>%
+  layout(title = "Population by Race", xaxis = list(title = "Race"), yaxis = list(title = "Population", range = c(0, 8000)))
+
+race_depression.lifetime.plot <- plot_ly(race_depression.lifetime, x = ~race, y = ~rate, type = 'bar') %>%
+  layout(title = "% Diagnosed with MDD by Race (Lifetime)", xaxis = list(title = "Race"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+
+annotations = list(
+  list(
+    x = 0.2,
+    y = 1.0,
+    text = "Population by Race",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  ),
+  list(
+    x = 0.75,
+    y = 1,
+    text = "Depression Rate (Lifetime) by Race",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  )
+)
+
+plotly::subplot(raceDist.plot, race_depression.lifetime.plot) %>%
+  layout(annotations = annotations, title = F, showlegend = F)
+
+chisq <- table(cpes.cleaned$race, cpes.cleaned$depression.lifetime)
+chisq.test(chisq)
+```
+
+Sample race distribution matches that of the general United States except for African Americans, who are over-represented in sample data.
+
+Second plot and chi-squared test indicates a statistically significant relationship between race and depression rate (Lifetime risk).
+
+## Household Income
+```{r eda householdIncome}
+householdIncome_depression.12Month <- dplyr :: select(cpes.cleaned, c("householdIncome", "depression.12Month"))
+
+householdIncome_depression.12Month <- mutate(householdIncome_depression.12Month, householdIncome = round_any(householdIncome, 5000, f = floor))
+
+householdIncome_Pop <- as.data.frame(table(householdIncome_depression.12Month[,"householdIncome"])) %>%
+  rename(householdIncome = Var1) %>%
+  rename("population" = Freq)
+
+uniquehouseholdIncomes <- length(unique(householdIncome_depression.12Month$householdIncome)) - 1
+householdIncome_depressionPop.12Month <- as.data.frame(
+  table(householdIncome_depression.12Month[householdIncome_depression.12Month$depression.12Month == '1',]))[1:uniquehouseholdIncomes,] %>%
+  rename("endorsed" = Freq)
+
+householdIncome_depression.12Month <- cbind(householdIncome_Pop, householdIncome_depressionPop.12Month$endorsed) %>% rename("endorsed" = "householdIncome_depressionPop.12Month$endorsed") %>% mutate(rate = endorsed / population)
+
+householdIncomeDist.plot <- plot_ly(householdIncome_depression.12Month, x = ~householdIncome, y = ~population, type = 'bar') %>%
+  layout(
+    title = "Population by Household Income",
+    xaxis = list(title = "Household Income"),
+    yaxis = list(title = "Population", range = c(0, 1500)))
+
+householdIncome_depression.12Month <- householdIncome_depression.12Month[householdIncome_depression.12Month$population >= 60,]
+householdIncome_depression.12Month %<>% mutate_at(c("householdIncome"), as.numeric)
+householdIncome_depression.12Month <- mutate(householdIncome_depression.12Month, householdIncome = 5000*householdIncome + 5000)
+householdIncome_depression.12Month.fit <- lm(rate~householdIncome, data = householdIncome_depression.12Month)
+
+householdIncome_depression.12Month.plot <- plot_ly(householdIncome_depression.12Month, x = ~householdIncome, y = ~rate, type = 'scatter', mode = 'markers') %>%
+  layout(title = "% Positive for MDD by Household Income (12Month)",
+         xaxis = list(title = "Household Income"),
+         yaxis = list(title = "% Positive for MDD (12Month)", range = c(0,0.25))) %>%
+  add_trace(x = ~householdIncome, y = fitted(householdIncome_depression.12Month.fit), mode = 'lines')
+
+annotations = list(
+  list(
+    x = 0.2,
+    y = 1.0,
+    text = "Population by Household Income",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  ),
+  list(
+    x = 0.75,
+    y = 1,
+    text = "Depression Rate (12 Month) by Household Income",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  )
+)
+
+plotly::subplot(householdIncomeDist.plot, householdIncome_depression.12Month.plot) %>%
+  layout(annotations = annotations, title = F, showlegend = F)
+
+summary(householdIncome_depression.12Month.fit)
+```
+
+Sample income distribution matches that of the general United States. Unfortunately, more specific data was not available for household incomes above 200k.
+
+At the 98% confidence level, linear model indicates a statistically significant relationship between household income and depression rate (Past year). Depression rate appears to decrease as household income increases. Coefficient: -0.000000208
+
+Note: A floor function was applied to household incomes to the nearest 5000.
+
+## Employment
+
+```{r eda employment}
+employment.current_depression.12Month <- dplyr :: select(cpes.cleaned, c("employment.current", "depression.12Month"))
+
+employment.current_Pop <- as.data.frame(table(employment.current_depression.12Month[,"employment.current"])) %>%
+  rename(employment.current = Var1) %>%
+  rename("population" = Freq)
+
+uniqueemployment.currents <- length(unique(employment.current_depression.12Month$employment.current)) - 1
+employment.current_depressionPop.12Month <- as.data.frame(
+  table(employment.current_depression.12Month[employment.current_depression.12Month$depression.12Month == '1',]))[1:uniqueemployment.currents,] %>%
+  rename("endorsed" = Freq)
+
+employment.current_depression.12Month <- cbind(employment.current_Pop, employment.current_depressionPop.12Month$endorsed) %>% rename("endorsed" = "employment.current_depressionPop.12Month$endorsed") %>% mutate(rate = endorsed / population)
+
+employment.current_depression.12Month <- employment.current_depression.12Month[employment.current_depression.12Month$population >= 30,]
+
+employment.current_depression.12Month$employment.current <- factor(employment.current_depression.12Month$employment.current,
+                                           levels = unique(employment.current_depression.12Month$employment.current)
+                                           [order(employment.current_depression.12Month$rate, decreasing = F)])
+
+employment.currentDist.plot <- plot_ly(employment.current_depression.12Month, x = ~employment.current, y = ~population, type = 'bar') %>%
+  layout(title = "Population by employment.current", xaxis = list(title = "employment.current"), yaxis = list(title = "Population", range = c(0, 15000)))
+
+employment.current_depression.12Month.plot <- plot_ly(employment.current_depression.12Month, x = ~employment.current, y = ~rate, type = 'bar') %>%
+  layout(title = "% Diagnosed with MDD by employment.current (Lifetime)", xaxis = list(title = "employment.current"), yaxis = list(title = "% Diagnosed with MDD (Lifetime)", range = c(0,0.25)))
+
+annotations = list(
+  list(
+    x = 0.2,
+    y = 1.0,
+    text = "Population by Household Employment",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  ),
+  list(
+    x = 0.75,
+    y = 1,
+    text = "Depression Rate (12 Month) by Employment",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  )
+)
+
+plotly::subplot(employment.currentDist.plot, employment.current_depression.12Month.plot) %>%
+  layout(annotations = annotations, title = F, showlegend = F)
+
+chisq <- table(cpes.cleaned$employment.current, cpes.cleaned$depression.12Month)
+chisq.test(chisq)
+```
+
+Sample employment distribution is representative of the general United States.
+
+The second plot and chi-squared test indicate a statistically significant relationship between employment status and depression rate (Past year). Depression rate is lowest for the employed (5.59%). However, perhaps surprisingly, depression rate is lower for the unemployed (6.51%) compared to those "Not in Labor Force" (8.69%). While both categories are not employed, the former is distinguished by the fact that members are actively looking for work, while the latter is out of the labor force but not seeking employment.
+
+## Education
+
+```{r eda education}
+yearsOfEducation.respondent_depression.lifetime <- dplyr :: select(cpes.cleaned, c("yearsOfEducation.respondent", "depression.lifetime", "age"))
+
+yearsOfEducation.respondent_depression.lifetime <- yearsOfEducation.respondent_depression.lifetime[yearsOfEducation.respondent_depression.lifetime$age > 27,] %>%
+  dplyr :: select(-c("age"))
+
+yearsOfEducation.respondent_Pop <- as.data.frame(table(yearsOfEducation.respondent_depression.lifetime[,"yearsOfEducation.respondent"])) %>%
+  rename(yearsOfEducation.respondent = Var1) %>%
+  rename("population" = Freq)
+
+uniqueyearsOfEducation.respondents <- length(unique(yearsOfEducation.respondent_depression.lifetime$yearsOfEducation.respondent)) - 1
+yearsOfEducation.respondent_depressionPop.lifetime <- as.data.frame(
+  table(yearsOfEducation.respondent_depression.lifetime[yearsOfEducation.respondent_depression.lifetime$depression.lifetime == '1',]))[1:uniqueyearsOfEducation.respondents,] %>%
+  rename("endorsed" = Freq)
+
+yearsOfEducation.respondent_depression.lifetime <- cbind(yearsOfEducation.respondent_Pop, yearsOfEducation.respondent_depressionPop.lifetime$endorsed) %>% rename("endorsed" = "yearsOfEducation.respondent_depressionPop.lifetime$endorsed") %>% mutate(rate = endorsed / population)
+
+yearsOfEducation.respondentDist.plot <- plot_ly(yearsOfEducation.respondent_depression.lifetime, x = ~yearsOfEducation.respondent, y = ~population, type = 'bar') %>%
+  layout(
+    title = "Population by Years of Education",
+    xaxis = list(title = "Years of Education"),
+    yaxis = list(title = "Population", range = c(0, 6000)))
+
+yearsOfEducation.respondent_depression.lifetime <- yearsOfEducation.respondent_depression.lifetime[yearsOfEducation.respondent_depression.lifetime$population >= 60,]
+yearsOfEducation.respondent_depression.lifetime %<>% mutate_at(c("yearsOfEducation.respondent"), as.numeric)
+yearsOfEducation.respondent_depression.lifetime <- mutate(yearsOfEducation.respondent_depression.lifetime, yearsOfEducation.respondent = yearsOfEducation.respondent + 3)
+yearsOfEducation.respondent_depression.lifetime.fit <- lm(rate~yearsOfEducation.respondent, data = yearsOfEducation.respondent_depression.lifetime)
+
+yearsOfEducation.respondent_depression.lifetime.plot <- plot_ly(yearsOfEducation.respondent_depression.lifetime, x = ~yearsOfEducation.respondent, y = ~rate, type = 'scatter', mode = 'markers') %>%
+  layout(title = "% Diagnosed with MDD by Years of Education (lifetime)",
+         xaxis = list(title = "Years of Education"),
+         yaxis = list(title = "% Diagnosed with MDD (lifetime)", range = c(0,0.25))) %>%
+  add_trace(x = ~yearsOfEducation.respondent, y = fitted(yearsOfEducation.respondent_depression.lifetime.fit), mode = 'lines')
+
+annotations = list(
+  list(
+    x = 0.2,
+    y = 1.0,
+    text = "Population by Yrs. Education",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  ),
+  list(
+    x = 0.75,
+    y = 1,
+    text = "Depression Rate (Lifetime) by Yrs. Education",
+    xref = "paper",
+    yref = "paper",
+    xanchor = "center",
+    yanchor = "bottom",
+    showarrow = FALSE
+  )
+)
+
+plotly::subplot(yearsOfEducation.respondentDist.plot, yearsOfEducation.respondent_depression.lifetime.plot) %>%
+  layout(annotations = annotations, title = F, showlegend = F)
+
+summary(yearsOfEducation.respondent_depression.lifetime.fit)
+```
+
+Sample education distribution is representative of the general United States, with an expected spike at 12 years.
+
+Linear model indicates a statistically significant relationship between years of education completed and depression rate (Lifetime risk). Depression rate appears to increase as years of education increases. This aligns with academic consensus. Coefficient: 0.00522
+
+Note: Respondents of less than 28 years of age were excluded to reduce time dependency and represent lifetime risk of depression.
+
+## EDA Summary
+Geography, gender, age, income, employment, and education all possessed statistically significant relationships with risk of MDD.
+
+# Predictive Modeling
+The following predictive models were used: Decision Trees, Random Forests, Multivariate Adaptive Regression Splines, Support Vector Machines (Gaussian RBF), and Gradient Boosted Trees.
+
+Our cleaned data-set is split into training, testing, and validation sets, created with a 70:15:15 split. With the exception of gradient boosted trees, models were only exposed to the training set during the training phase (Testing set used to select optimal iteration). Hence, both test and validation sets were used to validate performance on unseen data, but validation set was held with greater importance when evaluating gradient boosted trees.
+
+Missing data was imputed using na.roughfix, replacing missing observations with column medians for continuous variables and column modes for categorical variables. For training data, this was done after imputation using MICE and random forest based approaches were attempted, but consistently resulted in worse model performances. Various percentages of K-nearest neighbors based SMOTE-ing were also attempted, without consistent improvements. We hypothesize this is due to high missingness in many variables.
+
+As we focus on positive predictions, our baseline is a random guess model instead of Zero-Rule.
+
+Model performance was measured by the "Area Under Precision-Recall Curve (AUPRC)", as suggested by Davis and Goadrich, 2006 for imbalanced data when focusing on positive classes. After all models are trained, we select the best performing model and attempt to perform variable selection, reducing until AUPRC performance drops significantly (Below 90% of original model performance). This is our final model, of which will have its variable importances graphed to identify variables associated with depression.
+
+Additional graphs providing precision, recall, and F1-Measure at different thresholds are also provided after each trained model, along with tuned model hyperparameters.
+
+This process is repeated for depression.30day (Criterion: Positive for MDD in 30 days), depression.12month (Criterion: Positive for MDD in Year), and depression.lifetime (Criterion: Positive for MDD at least once in life).
+
+```{r functions}
+getFMeasure <- function(confusionMatrix)
+{
+  numerator <- (1 + (1)^2) * confusionMatrix$byClass[1] * confusionMatrix$byClass[3]
+  denominator <- ((1)^2 * confusionMatrix$byClass[1]) + confusionMatrix$byClass[3]
+  return (numerator / denominator)
+}
+```
+
+# Predicting Presence of MDD in Past Month
+
+## Setup
+
+```{r 30 Day Setup}
+#dplyr :: select rows where past year depression data is valid
+data <- cpes.cleaned[is.na(cpes.cleaned$depression.30day) == F,]
+data <- dplyr :: select(data, -c("depression.lifetime", "depression.12Month", "CASEID"))
+data <- dplyr :: select(data, -contains(".lifetime"))
+data <- dplyr :: select(data, -contains(".12Month"))
+
+#Convert factors to be more compatible with prediction models
+data$depression.30day <- as.factor(ifelse(data$depression.30day == 5, "N", "Y")) #Apparently caret AUPRC breaks with numbers
+
+#Reorder Data
+positionOfDepression <- which(names(data) == "depression.30day")
+otherPos <- 1:ncol(data)
+otherPos <- otherPos[-positionOfDepression]
+data <- data[,c(positionOfDepression, otherPos)]
+
+# Randomize rows of data
+set.seed(123)
+data <- data[sample(nrow(data), nrow(data)),]
+
+#Sample Training, Tuning, and Testing Sets
+set.seed(123)
+sampIndex <- sample(3, nrow(data), prob = c(0.7, 0.15, 0.15), replace = T)
+```
+
+Training, Testing, and Validation Sets were created in 70:15:15 split.
+
+## Baseline: Random Guess
+
+The random guess model uses the sample proportion of people positive for MDD as the probability when randomly guessing if a person has MDD. Below you may find relevant positive class statistics along with a confusion matrix. This baseline model yields AUPRC = 0.024.
+
+```{r 30 Day Baseline (Random)}
+data_endorsed.prop <- nrow(data[data$depression.30day == 'Y',]) / nrow(data)
+
+fMeasure.baseline <- 0
+sensitivity.baseline <- 0
+posPredVal.baseline <- 0
+
+for(i in 1:300)
+{
+  #Simulate prediction based on proportion
+  baseline.pred <- sample(2, length(data$depression.30day), prob = c(1 - data_endorsed.prop, data_endorsed.prop), replace = T) - 1
+  baseline.pred <- as.factor(ifelse(baseline.pred == 1, 'Y', 'N'))
+  #Confusion matrix
+  confusionMatrix.baseline <- confusionMatrix(baseline.pred, data$depression.30day, positive = 'Y', mode = 'everything')
+
+  fMeasure.baseline <- fMeasure.baseline + getFMeasure(confusionMatrix.baseline)
+  sensitivity.baseline <- sensitivity.baseline + confusionMatrix.baseline$byClass[1]
+  posPredVal.baseline <- posPredVal.baseline + confusionMatrix.baseline$byClass[3]
+}
+
+fMeasure.baseline <- fMeasure.baseline / 300
+names(fMeasure.baseline) <- "fMeasure.baseline"
+sensitivity.baseline <- sensitivity.baseline / 300
+posPredVal.baseline <- posPredVal.baseline / 300
+auprc.baseline <- c("AUPRC" = unname(data_endorsed.prop))
+
+data.frame("AUPRC" = auprc.baseline,
+           "Recall" = sensitivity.baseline,
+           "Precision" = posPredVal.baseline, row.names = NULL)
+
+confusionMatrix.baseline
+```
+
+## Training Models {.tabset}
+
+Navigate the tab menu to view the details and performance metrics of each model. The entirety of the code used to train models are available by revealing the hidden chunks.
+
+### Decision Tree
+
+```{r 30 Day Tree, warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+library(ROSE)
+set.seed(123)
+train <- ovun.sample(depression.30day~., data = train, method = 'both', N = 1750)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+set.seed(123)
+train.fit <- train(depression.30day~., data = train, method = 'rpart', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.30day~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.30day~., data = test)[,-1])
+
+#Threshold graph
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.30day, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.30day, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalTreeModel.30day <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Set
+
+```{r}
+test.pred <- predict(train_finalTreeModel.30day, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+  add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+  add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+  add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+  add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+  add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Tree
+
+```{r}
+rpart.plot(train_finalTreeModel.30day, type = 4, extra = 102)
+```
+
+#### Variable Importance Plot
+
+```{r}
+vip(train_finalTreeModel.30day, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalTreeModel.30day$tuneValue
+```
+
+### Random Forest
+```{r 30 Day Random Forest, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.30day~., data = train, method = 'both', N = 3000)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.30day~., data = train, method = 'rf', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.30day~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.30day~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.30day, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.30day, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalRFModel.30day <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalRFModel.30day, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalRFModel.30day, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalRFModel.30day$tuneValue
+```
+
+### Multivariate Adaptive Regression Splines
+
+```{r 30 Day Multivariate Adaptive Regression Splines (MARS), warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.30day~., data = train, method = 'both', N = 4250)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.30day~., data = train, method = 'earth', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.30day~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.30day~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "response")
+  test.pred <- predict(train.fit, xtest, type = "response")
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.30day, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.30day, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalMARSModel.30day <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalMARSModel.30day, xtest, type = "response")
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalMARSModel.30day, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalMARSModel.30day$tuneValue
+```
+
+### RBF Support Vector Machine
+```{r 30 Day Support Vector Machine RBF, warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.30day~., data = train, method = 'both', N = 2250)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.30day~., data = train, method = 'svmRadial', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.30day~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.30day~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.30day, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.30day, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalSVMModel.30day <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalSVMModel.30day, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Hyperparameters
+
+```{r}
+attributes <- attributes(train_finalSVMModel.30day)
+attributes$param
+attributes$kernelf
+```
+
+### Gradient Boosted Trees
+
+```{r 30 Day xgBoost, results = 'hide'}
+set.seed(123)
+train <- data[sampIndex == 1,]
+train$depression.30day <- as.numeric(train$depression.30day) - 1 #N is 0, Y is 1
+set.seed(123)
+train <- ovun.sample(depression.30day~., data = train, method = 'both', N = 1500, na.action = 'na.roughfix')$data
+train_matrix <- as.matrix(sparse.model.matrix(depression.30day~., -1, data = train)) %>%
+  xgb.DMatrix(label = train[,'depression.30day'])
+
+test <- na.roughfix(data[sampIndex == 2,])
+test$depression.30day <- as.numeric(test$depression.30day) - 1 #N is 0, Y is 1
+test_matrix <- as.matrix(sparse.model.matrix(depression.30day~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.30day'])
+
+# train$depression.30day <- as.factor(ifelse(train$depression.30day == 1, 'Y', 'N'))
+# ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+# train.fit <- train(depression.30day~., data = train,
+#                    method = 'xgbTree',
+#                    objective = 'binary:logistic',
+#                    metric = 'AUC',
+#                    trControl = ctrl)
+#
+xgb_params <- list(objective = 'binary:logistic', eval_metric = 'aucpr')
+watchlist <- list(train = train_matrix, test = test_matrix)
+
+set.seed(123)
+train.fit <- xgb.train(params = xgb_params, data = train_matrix,
+                       eta = 0.4,
+                       max_depth = 3,
+                       gamma = 0,
+                       colsample_bytree = 0.8,
+                       min_child_weight = 1,
+                       subsample = 0.75,
+                       early_stopping_rounds = 100,
+                       nrounds = 500,
+                       validate_parameters = T, watchlist = watchlist)
+
+eplot <- data.frame(train.fit$evaluation_log)
+plot_ly(eplot,
+          x = ~iter, y = ~train_aucpr, name = 'Train AUCPR', type = 'scatter', mode = 'lines', line = list(color = 'blue')) %>%
+    add_trace(x = ~iter, y = ~test_aucpr, name = 'Test AUCPR', line = list(color = 'red'))
+
+# Threshold Plot
+{
+  train$depression.30day <- as.factor(ifelse(train$depression.30day == 1, 'Y', 'N'))
+  test$depression.30day <- as.factor(ifelse(test$depression.30day == 1, 'Y', 'N'))
+  train.pred <- predict(train.fit, train_matrix)
+  test.pred <- predict(train.fit, test_matrix)
+
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- (i) / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.30day, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.30day, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+
+  plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+}
+
+train_finalXGBoost.30day <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalXGBoost.30day, test_matrix)
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalXGBoost.30day, n = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalXGBoost.30day$params
+```
+
+## Model Comparisons {.tabset}
+
+```{r 30 Day Model Comparisons}
+test <- na.roughfix(data[sampIndex == 2,])
+xtest <- as.data.frame(model.matrix(depression.30day~., data = test)[,-1])
+val <- na.roughfix(data[sampIndex == 3,])
+xval <- as.data.frame(model.matrix(depression.30day~., data = val)[,-1])
+```
+
+Each model's AUPRC graphs are shown for their performance on test and validation sets. The upper graph shows test set performance, while the lower graph shows validation set performance.
+
+Our best model was Gradient Boosted Trees, with test set performance of AUC = 0.118 and validation set performance of AUC = 0.142. For reference, our baseline model performed at AUC = 0.024.
+
+### Decision Tree
+
+```{r}
+test.pred <- predict(train_finalTreeModel.30day, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalTreeModel.30day, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.30day == "Y"]
+bg.val <- val.pred[val$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### Random Forest
+
+```{r}
+test.pred <- predict(train_finalRFModel.30day, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalRFModel.30day, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.30day == "Y"]
+bg.val <- val.pred[val$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### M.A.R.S.
+
+```{r}
+test.pred <- predict(train_finalMARSModel.30day, xtest, type = "response")
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalMARSModel.30day, xval, type = "response")
+fg.val <- val.pred[val$depression.30day == "Y"]
+bg.val <- val.pred[val$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### RBF Support Vector Machine
+
+```{r}
+test.pred <- predict(train_finalSVMModel.30day, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalSVMModel.30day, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.30day == "Y"]
+bg.val <- val.pred[val$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### Gradient Boosted Trees
+
+```{r}
+test_matrix <- as.matrix(sparse.model.matrix(depression.30day~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.30day'])
+val_matrix <- as.matrix(sparse.model.matrix(depression.30day~., -1, data = val)) %>%
+  xgb.DMatrix(label = val[,'depression.30day'])
+
+test.pred <- predict(train_finalXGBoost.30day, test_matrix, type = "prob")
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalXGBoost.30day, val_matrix, type = "prob")
+fg.val <- val.pred[val$depression.30day == "Y"]
+bg.val <- val.pred[val$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+
+# importance <- xgb.importance(train_finalXGBoost.30day$feature_names, model = train_finalXGBoost.30day)
+# xgb.plot.importance(importance[c(1:15),])
+# xgb.plot.importance(importance[c(16:30),])
+```
+
+## Best Model Variable Selection
+
+We aim to retrain our best model (Gradient Boosted Trees), eliminating as many variables as possible while staying within 90% of the original model performance. This is done using the Gradient Boosted Tree's importance plot, and then backwards selection. All final variables and their importances are shown below, followed by test set PRC-curve and then validation set PRC-curve.  We'll use this as our final model for modeling 30 Day MDD Presence.
+
+Our final retrained Gradient Boosted Tree reduces features used from 113 to 10.
+
+ * householdIncome
+ * socialLifeDifficulty.30day
+ * healthWorkAbsence.30day
+ * age
+ * height.inches
+ * workHrs.week
+ * relativeWellOffRank.usPop
+ * gamble.ageFirstExposure
+ * freqFriendInteraction
+ * yearsOfEducation.respondent
+
+Test and Validation set performances also appear consistent with each other (AUPRC ~0.103).
+
+Using only 10 features, we achieve 300% better performance than our baseline (AUPRC = 0.024).
+
+Below are some statistics for this final model.
+
+```{r 30 Day XGBoost Retrain, results = 'hide'}
+train <- na.roughfix(data[sampIndex == 1,]) %>% dplyr :: select(c("depression.30day", "householdIncome", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "age", "height.inches", "workHrs.week", "relativeWellOffRank.usPop", "gamble.ageFirstExposure", "freqFriendInteraction", "yearsOfEducation.respondent"))
+train$depression.30day <- as.numeric(train$depression.30day) - 1 #N is 0, Y is 1
+set.seed(123)
+train <- ovun.sample(depression.30day~., data = train, method = 'both', N = 4500)$data
+train_matrix <- as.matrix(sparse.model.matrix(depression.30day~., -1, data = train)) %>%
+  xgb.DMatrix(label = train[,'depression.30day'])
+
+test <- na.roughfix(data[sampIndex == 2,]) %>% dplyr :: select(c("depression.30day", "householdIncome", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "age", "height.inches", "workHrs.week", "relativeWellOffRank.usPop", "gamble.ageFirstExposure", "freqFriendInteraction", "yearsOfEducation.respondent"))
+test$depression.30day <- as.numeric(test$depression.30day) - 1 #N is 0, Y is 1
+test_matrix <- as.matrix(sparse.model.matrix(depression.30day~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.30day'])
+
+val <- na.roughfix(data[sampIndex == 3,]) %>% dplyr :: select(c("depression.30day", "householdIncome", "socialLifeDifficulty.30day", "healthWorkAbsence.30day", "age", "height.inches", "workHrs.week", "relativeWellOffRank.usPop", "gamble.ageFirstExposure", "freqFriendInteraction", "yearsOfEducation.respondent"))
+val$depression.30day <- as.numeric(val$depression.30day) - 1 #N is 0, Y is 1
+val_matrix <- as.matrix(sparse.model.matrix(depression.30day~., -1, data = val)) %>%
+  xgb.DMatrix(label = val[,'depression.30day'])
+
+# train$depression.30day <- as.factor(ifelse(train$depression.30day == 1, 'Y', 'N'))
+# ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+# train.fit <- train(depression.30day~., data = train,
+#                    method = 'xgbTree',
+#                    objective = 'binary:logistic',
+#                    metric = 'AUC',
+#                    trControl = ctrl)
+
+xgb_params <- list(objective = 'binary:logistic', eval_metric = 'aucpr')
+watchlist <- list(train = train_matrix, test = test_matrix)
+
+set.seed(123)
+train.fit <- xgb.train(params = xgb_params, data = train_matrix,
+                       eta = 0.4,
+                       max_depth = 3,
+                       gamma = 0,
+                       colsample_bytree = 0.8,
+                       min_child_weight = 1,
+                       subsample = 0.75,
+                       early_stopping_rounds = 100,
+                       nrounds = 500,
+                       validate_parameters = T, watchlist = watchlist)
+
+XGBoost_featureSelected.30day <- train.fit #Save for final
+```
+
+### Variable Importance Plot
+
+```{r}
+vip(XGBoost_featureSelected.30day, n = 20)
+```
+
+### Test Set PRC-curve
+
+```{r}
+test$depression.30day <- as.factor(ifelse(test$depression.30day == 1, 'Y', 'N'))
+test.pred <- predict(XGBoost_featureSelected.30day, test_matrix, type = "prob")
+fg.test <- test.pred[test$depression.30day == "Y"]
+bg.test <- test.pred[test$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+### Validation Set PRC-curve
+
+```{r}
+val$depression.30day <- as.factor(ifelse(val$depression.30day == 1, 'Y', 'N'))
+val.pred <- predict(XGBoost_featureSelected.30day, val_matrix, type = "prob")
+fg.val <- val.pred[val$depression.30day == "Y"]
+bg.val <- val.pred[val$depression.30day == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+# Predicting Presence of MDD in Past Year
+
+## Setup
+
+```{r 12 Month Setup}
+#dplyr :: select rows where past year depression data is valid
+data <- cpes.cleaned[is.na(cpes.cleaned$depression.12Month) == F,]
+data <- dplyr :: select(data, -c("depression.lifetime", "depression.30day", "CASEID"))
+data <- dplyr :: select(data, -contains(".lifetime"))
+data <- dplyr :: select(data, -contains(".30day"))
+
+#Convert factors to be more compatible with prediction models
+data$depression.12Month <- as.factor(ifelse(data$depression.12Month == 5, "N", "Y")) #Apparently caret AUPRC breaks with numbers
+
+#Reorder Data
+positionOfDepression <- which(names(data) == "depression.12Month")
+otherPos <- 1:ncol(data)
+otherPos <- otherPos[-positionOfDepression]
+data <- data[,c(positionOfDepression, otherPos)]
+
+# Randomize rows of data
+set.seed(123)
+data <- data[sample(nrow(data), nrow(data)),]
+
+#Sample Training, Tuning, and Testing Sets
+set.seed(123)
+sampIndex <- sample(3, nrow(data), prob = c(0.7, 0.15, 0.15), replace = T)
+```
+
+Training, Testing, and Validation Sets were created in 70:15:15 split.
+
+## Baseline: Random Guess
+
+The random guess model uses the sample proportion of people positive for MDD as the probability when randomly guessing if a person has MDD. Below you may find relevant positive class statistics along with a confusion matrix. This baseline model yields AUPRC = 0.0652
+
+```{r 12 Month Baseline (Random)}
+data_endorsed.prop <- nrow(data[data$depression.12Month == 'Y',]) / nrow(data)
+
+fMeasure.baseline <- 0
+sensitivity.baseline <- 0
+posPredVal.baseline <- 0
+
+for(i in 1:300)
+{
+  #Simulate prediction based on proportion
+  baseline.pred <- sample(2, length(data$depression.12Month), prob = c(1 - data_endorsed.prop, data_endorsed.prop), replace = T) - 1
+  baseline.pred <- as.factor(ifelse(baseline.pred == 1, 'Y', 'N'))
+  #Confusion matrix
+  confusionMatrix.baseline <- confusionMatrix(baseline.pred, data$depression.12Month, positive = 'Y', mode = 'everything')
+
+  fMeasure.baseline <- fMeasure.baseline + getFMeasure(confusionMatrix.baseline)
+  sensitivity.baseline <- sensitivity.baseline + confusionMatrix.baseline$byClass[1]
+  posPredVal.baseline <- posPredVal.baseline + confusionMatrix.baseline$byClass[3]
+}
+
+fMeasure.baseline <- fMeasure.baseline / 300
+names(fMeasure.baseline) <- "fMeasure.baseline"
+sensitivity.baseline <- sensitivity.baseline / 300
+posPredVal.baseline <- posPredVal.baseline / 300
+auprc.baseline <- c("AUPRC" = unname(data_endorsed.prop))
+
+data.frame("AUPRC" = auprc.baseline,
+           "Recall" = sensitivity.baseline,
+           "Precision" = posPredVal.baseline, row.names = NULL)
+
+confusionMatrix.baseline
+```
+
+## Training Models {.tabset}
+
+Navigate the tab menu to view the details and performance metrics of each model. The entirety of the code used to train models are available by revealing the hidden chunks.
+
+### Decision Tree
+
+```{r 12 Month Tree, warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.12Month~., data = train, method = 'both', N = 12000)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+set.seed(123)
+train.fit <- train(depression.12Month~., data = train, method = 'rpart', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.12Month~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.12Month~., data = test)[,-1])
+
+#Threshold graph
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.12Month, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.12Month, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalTreeModel.12Month <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Set
+
+```{r}
+test.pred <- predict(train_finalTreeModel.12Month, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+  add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+  add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+  add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+  add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+  add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Tree
+
+```{r}
+rpart.plot(train_finalTreeModel.12Month, type = 4, extra = 102)
+```
+
+#### Variable Importance Plot
+
+```{r}
+vip(train_finalTreeModel.12Month, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalTreeModel.12Month$tuneValue
+```
+
+### Random Forest
+```{r 12 Month Random Forest, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.12Month~., data = train, method = 'under')$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.12Month~., data = train, method = 'rf', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.12Month~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.12Month~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.12Month, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.12Month, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalRFModel.12Month <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalRFModel.12Month, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalRFModel.12Month, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalRFModel.12Month$tuneValue
+```
+
+### Multivariate Adaptive Regression Splines
+
+```{r 12 Month Multivariate Adaptive Regression Splines (MARS), warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.12Month~., data = train, method = 'both', N = 2500)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.12Month~., data = train, method = 'earth', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.12Month~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.12Month~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "response")
+  test.pred <- predict(train.fit, xtest, type = "response")
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.12Month, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.12Month, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalMARSModel.12Month <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalMARSModel.12Month, xtest, type = "response")
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalMARSModel.12Month, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalMARSModel.12Month$tuneValue
+```
+
+### RBF Support Vector Machine
+```{r 12 Month Support Vector Machine RBF, warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.12Month~., data = train, method = 'both', N = 6000)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.12Month~., data = train, method = 'svmRadial', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.12Month~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.12Month~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.12Month, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.12Month, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalSVMModel.12Month <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalSVMModel.12Month, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Hyperparameters
+
+```{r}
+attributes <- attributes(train_finalSVMModel.12Month)
+attributes$param
+attributes$kernelf
+```
+
+### Gradient Boosted Trees
+
+```{r 12 Month xgBoost, results = 'hide'}
+set.seed(123)
+train <- data[sampIndex == 1,]
+train$depression.12Month <- as.numeric(train$depression.12Month) - 1 #N is 0, Y is 1
+set.seed(123)
+train <- ovun.sample(depression.12Month~., data = train, method = 'both', N = 8500, na.action = 'na.roughfix')$data
+train_matrix <- as.matrix(sparse.model.matrix(depression.12Month~., -1, data = train)) %>%
+  xgb.DMatrix(label = train[,'depression.12Month'])
+
+test <- na.roughfix(data[sampIndex == 2,])
+test$depression.12Month <- as.numeric(test$depression.12Month) - 1 #N is 0, Y is 1
+test_matrix <- as.matrix(sparse.model.matrix(depression.12Month~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.12Month'])
+
+# train$depression.12Month <- as.factor(ifelse(train$depression.12Month == 1, 'Y', 'N'))
+# ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+# train.fit <- train(depression.12Month~., data = train,
+#                    method = 'xgbTree',
+#                    objective = 'binary:logistic',
+#                    metric = 'AUC',
+#                    trControl = ctrl)
+#
+xgb_params <- list(objective = 'binary:logistic', eval_metric = 'aucpr')
+watchlist <- list(train = train_matrix, test = test_matrix)
+
+set.seed(123)
+train.fit <- xgb.train(params = xgb_params, data = train_matrix,
+                       eta = 0.4,
+                       max_depth = 3,
+                       gamma = 0,
+                       colsample_bytree = 0.8,
+                       min_child_weight = 1,
+                       subsample = 0.75,
+                       early_stopping_rounds = 100,
+                       nrounds = 500,
+                       validate_parameters = T, watchlist = watchlist)
+
+eplot <- data.frame(train.fit$evaluation_log)
+plot_ly(eplot,
+          x = ~iter, y = ~train_aucpr, name = 'Train AUCPR', type = 'scatter', mode = 'lines', line = list(color = 'blue')) %>%
+    add_trace(x = ~iter, y = ~test_aucpr, name = 'Test AUCPR', line = list(color = 'red'))
+
+# Threshold Plot
+{
+  train$depression.12Month <- as.factor(ifelse(train$depression.12Month == 1, 'Y', 'N'))
+  test$depression.12Month <- as.factor(ifelse(test$depression.12Month == 1, 'Y', 'N'))
+  train.pred <- predict(train.fit, train_matrix)
+  test.pred <- predict(train.fit, test_matrix)
+
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- (i) / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.12Month, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.12Month, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+
+  plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+}
+
+train_finalXGBoost.12Month <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalXGBoost.12Month, test_matrix)
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalXGBoost.12Month, n = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalXGBoost.12Month$params
+```
+
+## Model Comparisons {.tabset}
+
+```{r 12 Month Model Comparisons}
+test <- na.roughfix(data[sampIndex == 2,])
+xtest <- as.data.frame(model.matrix(depression.12Month~., data = test)[,-1])
+val <- na.roughfix(data[sampIndex == 3,])
+xval <- as.data.frame(model.matrix(depression.12Month~., data = val)[,-1])
+```
+
+Each model's AUPRC graphs are shown for their performance on test and validation sets. The upper graph shows test set performance, while the lower graph shows validation set performance.
+
+Our best model was Gradient Boosted Trees, with test set performance of AUC = 0.266 and validation set performance of AUC = 0.167. For reference, our baseline model performed at AUC = 0.0652
+
+### Decision Tree
+
+```{r}
+test.pred <- predict(train_finalTreeModel.12Month, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalTreeModel.12Month, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.12Month == "Y"]
+bg.val <- val.pred[val$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### Random Forest
+
+```{r}
+test.pred <- predict(train_finalRFModel.12Month, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalRFModel.12Month, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.12Month == "Y"]
+bg.val <- val.pred[val$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### M.A.R.S.
+
+```{r}
+test.pred <- predict(train_finalMARSModel.12Month, xtest, type = "response")
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalMARSModel.12Month, xval, type = "response")
+fg.val <- val.pred[val$depression.12Month == "Y"]
+bg.val <- val.pred[val$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### RBF Support Vector Machine
+
+```{r}
+test.pred <- predict(train_finalSVMModel.12Month, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalSVMModel.12Month, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.12Month == "Y"]
+bg.val <- val.pred[val$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### Gradient Boosted Trees
+
+```{r}
+test_matrix <- as.matrix(sparse.model.matrix(depression.12Month~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.12Month'])
+val_matrix <- as.matrix(sparse.model.matrix(depression.12Month~., -1, data = val)) %>%
+  xgb.DMatrix(label = val[,'depression.12Month'])
+
+test.pred <- predict(train_finalXGBoost.12Month, test_matrix, type = "prob")
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalXGBoost.12Month, val_matrix, type = "prob")
+fg.val <- val.pred[val$depression.12Month == "Y"]
+bg.val <- val.pred[val$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+
+# importance <- xgb.importance(train_finalXGBoost.12Month$feature_names, model = train_finalXGBoost.12Month)
+# xgb.plot.importance(importance[c(1:15),])
+# xgb.plot.importance(importance[c(16:30),])
+```
+
+## Best Model Variable Selection
+
+Our best model predicting presence of MDD during the past year was Gradient Boosted Trees. Again, we eliminate as many variables as possible while staying within 90% of the original model performance.
+
+Our final retrained Gradient Boosted Tree reduces features used from 113 to 24
+
+ * age
+ * householdIncome
+ * freqArgueWithRelatives
+ * personality.sociallyAwkward
+ * personality.dislikeAlone
+ * relativeWellOffRank.local
+ * freqFriendInteraction
+ * sex
+ * height.inches
+ * freqTalkWithRelatives
+ * gamble.ageFirstExposure
+ * employment.initialAge
+ * maritalStatus
+ * employment.current
+ * wksUnemployed.12month
+ * yearsOfEducation.respondent
+ * finances.numberPplSupportingHousehold
+ * gamble.totalCount
+ * personality.preferSoloActivities
+ * personality.indecisiveAbtSelfPath
+ * fatherDeath.respondentAge
+ * nameCalled.freq
+ * race
+ * workHrs.week
+
+Test and Validation set performances are AUPRC = 0.206 and AUPRC = 0.162 respectively
+
+Using 24 features, we achieve ~150% better performance than our baseline (AUPRC = 0.0652).
+
+Below are some statistics for this final model.
+
+```{r 12 Month XGBoost Retrain, results = 'hide'}
+train <- na.roughfix(data[sampIndex == 1,]) %>% dplyr :: select(c("depression.12Month", "age", "householdIncome", "freqArgueWithRelatives", "personality.sociallyAwkward", "personality.dislikeAlone", "relativeWellOffRank.local", "freqFriendInteraction", "sex", "height.inches", "freqTalkWithRelatives", "gamble.ageFirstExposure", "employment.initialAge", "maritalStatus", "employment.current", "wksUnemployed.12month", "yearsOfEducation.respondent", "finances.numberPplSupportingHousehold", "gamble.totalCount", "personality.preferSoloActivities", "personality.indecisiveAbtSelfPath", "fatherDeath.respondentAge", "nameCalled.freq", "race", "workHrs.week"))
+train$depression.12Month <- as.numeric(train$depression.12Month) - 1 #N is 0, Y is 1
+set.seed(123)
+train <- ovun.sample(depression.12Month~., data = train, method = 'both', N = 2000)$data
+train_matrix <- as.matrix(sparse.model.matrix(depression.12Month~., -1, data = train)) %>%
+  xgb.DMatrix(label = train[,'depression.12Month'])
+
+test <- na.roughfix(data[sampIndex == 2,]) %>% dplyr :: select(c("depression.12Month", "age", "householdIncome", "freqArgueWithRelatives", "personality.sociallyAwkward", "personality.dislikeAlone", "relativeWellOffRank.local", "freqFriendInteraction", "sex", "height.inches", "freqTalkWithRelatives", "gamble.ageFirstExposure", "employment.initialAge", "maritalStatus", "employment.current", "wksUnemployed.12month", "yearsOfEducation.respondent", "finances.numberPplSupportingHousehold", "gamble.totalCount", "personality.preferSoloActivities", "personality.indecisiveAbtSelfPath", "fatherDeath.respondentAge", "nameCalled.freq", "race", "workHrs.week"))
+test$depression.12Month <- as.numeric(test$depression.12Month) - 1 #N is 0, Y is 1
+test_matrix <- as.matrix(sparse.model.matrix(depression.12Month~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.12Month'])
+
+val <- na.roughfix(data[sampIndex == 3,]) %>% dplyr :: select(c("depression.12Month", "age", "householdIncome", "freqArgueWithRelatives", "personality.sociallyAwkward", "personality.dislikeAlone", "relativeWellOffRank.local", "freqFriendInteraction", "sex", "height.inches", "freqTalkWithRelatives", "gamble.ageFirstExposure", "employment.initialAge", "maritalStatus", "employment.current", "wksUnemployed.12month", "yearsOfEducation.respondent", "finances.numberPplSupportingHousehold", "gamble.totalCount", "personality.preferSoloActivities", "personality.indecisiveAbtSelfPath", "fatherDeath.respondentAge", "nameCalled.freq", "race", "workHrs.week"))
+val$depression.12Month <- as.numeric(val$depression.12Month) - 1 #N is 0, Y is 1
+val_matrix <- as.matrix(sparse.model.matrix(depression.12Month~., -1, data = val)) %>%
+  xgb.DMatrix(label = val[,'depression.12Month'])
+
+# train$depression.12Month <- as.factor(ifelse(train$depression.12Month == 1, 'Y', 'N'))
+# ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+# train.fit <- train(depression.12Month~., data = train,
+#                    method = 'xgbTree',
+#                    objective = 'binary:logistic',
+#                    metric = 'AUC',
+#                    trControl = ctrl)
+
+xgb_params <- list(objective = 'binary:logistic', eval_metric = 'aucpr')
+watchlist <- list(train = train_matrix, test = val_matrix)
+
+set.seed(123)
+train.fit <- xgb.train(params = xgb_params, data = train_matrix,
+                       eta = 0.1,
+                       max_depth = 4,
+                       gamma = 0,
+                       colsample_bytree = 0.4,
+                       min_child_weight = 0.1,
+                       subsample = 1,
+                       early_stopping_rounds = 100,
+                       nrounds = 500,
+                       validate_parameters = T, watchlist = watchlist)
+
+XGBoost_featureSelected.12Month <- train.fit #Save for final
+```
+
+### Variable Importance Plot
+
+```{r}
+vip(XGBoost_featureSelected.12Month, n = 24)
+```
+
+### Test Set PRC-curve
+
+```{r}
+test$depression.12Month <- as.factor(ifelse(test$depression.12Month == 1, 'Y', 'N'))
+test.pred <- predict(XGBoost_featureSelected.12Month, test_matrix, type = "prob")
+fg.test <- test.pred[test$depression.12Month == "Y"]
+bg.test <- test.pred[test$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+### Validation Set PRC-curve
+
+```{r}
+val$depression.12Month <- as.factor(ifelse(val$depression.12Month == 1, 'Y', 'N'))
+val.pred <- predict(XGBoost_featureSelected.12Month, val_matrix, type = "prob")
+fg.val <- val.pred[val$depression.12Month == "Y"]
+bg.val <- val.pred[val$depression.12Month == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+# Predicting Presence of MDD in Lifetime
+
+## Setup
+
+```{r Lifetime Setup}
+#dplyr :: select rows where Lifetime depression data is valid
+data <- cpes.cleaned[is.na(cpes.cleaned$depression.lifetime) == F,]
+data <- dplyr :: select(data, -c("depression.30day", "depression.12Month", "CASEID"))
+data <- dplyr :: select(data, -contains(".30day"))
+data <- dplyr :: select(data, -contains(".12Month"))
+
+#Convert factors to be more compatible with prediction models
+data$depression.lifetime <- as.factor(ifelse(data$depression.lifetime == 5, "N", "Y")) #Apparently caret AUPRC breaks with numbers
+
+#Reorder Data
+positionOfDepression <- which(names(data) == "depression.lifetime")
+otherPos <- 1:ncol(data)
+otherPos <- otherPos[-positionOfDepression]
+data <- data[,c(positionOfDepression, otherPos)]
+
+# Randomize rows of data
+set.seed(123)
+data <- data[sample(nrow(data), nrow(data)),]
+
+#Sample Training, Tuning, and Testing Sets
+set.seed(123)
+sampIndex <- sample(3, nrow(data), prob = c(0.7, 0.15, 0.15), replace = T)
+```
+
+Training, Testing, and Validation Sets were created in 70:15:15 split.
+
+## Baseline: Random Guess
+
+The random guess model uses the sample proportion of people positive for MDD as the probability when randomly guessing if a person has MDD. Below you may find relevant positive class statistics along with a confusion matrix. This baseline model yields AUPRC = 0.143
+
+```{r Lifetime Baseline (Random)}
+data_endorsed.prop <- nrow(data[data$depression.lifetime == 'Y',]) / nrow(data)
+
+fMeasure.baseline <- 0
+sensitivity.baseline <- 0
+posPredVal.baseline <- 0
+
+for(i in 1:300)
+{
+  #Simulate prediction based on proportion
+  baseline.pred <- sample(2, length(data$depression.lifetime), prob = c(1 - data_endorsed.prop, data_endorsed.prop), replace = T) - 1
+  baseline.pred <- as.factor(ifelse(baseline.pred == 1, 'Y', 'N'))
+  #Confusion matrix
+  confusionMatrix.baseline <- confusionMatrix(baseline.pred, data$depression.lifetime, positive = 'Y', mode = 'everything')
+
+  fMeasure.baseline <- fMeasure.baseline + getFMeasure(confusionMatrix.baseline)
+  sensitivity.baseline <- sensitivity.baseline + confusionMatrix.baseline$byClass[1]
+  posPredVal.baseline <- posPredVal.baseline + confusionMatrix.baseline$byClass[3]
+}
+
+fMeasure.baseline <- fMeasure.baseline / 300
+names(fMeasure.baseline) <- "fMeasure.baseline"
+sensitivity.baseline <- sensitivity.baseline / 300
+posPredVal.baseline <- posPredVal.baseline / 300
+auprc.baseline <- c("AUPRC" = unname(data_endorsed.prop))
+
+data.frame("AUPRC" = auprc.baseline,
+           "Recall" = sensitivity.baseline,
+           "Precision" = posPredVal.baseline, row.names = NULL)
+
+confusionMatrix.baseline
+```
+
+## Training Models {.tabset}
+
+Navigate the tab menu to view the details and performance metrics of each model. The entirety of the code used to train models are available by revealing the hidden chunks.
+
+### Decision Tree
+
+```{r Lifetime Tree, warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.lifetime~., data = train, method = 'both', N = 5500)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+set.seed(123)
+train.fit <- train(depression.lifetime~., data = train, method = 'rpart', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.lifetime~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.lifetime~., data = test)[,-1])
+
+#Threshold graph
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.lifetime, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.lifetime, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalTreeModel.lifetime <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Set
+
+```{r}
+test.pred <- predict(train_finalTreeModel.lifetime, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+  add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+  add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+  add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+  add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+  add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Tree
+
+```{r}
+rpart.plot(train_finalTreeModel.lifetime, type = 4, extra = 102)
+```
+
+#### Variable Importance Plot
+
+```{r}
+vip(train_finalTreeModel.lifetime, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalTreeModel.lifetime$tuneValue
+```
+
+### Random Forest
+```{r Lifetime Random Forest, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.lifetime~., data = train, method = 'both', N = 3000)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.lifetime~., data = train, method = 'rf', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.lifetime~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.lifetime~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.lifetime, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.lifetime, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalRFModel.lifetime <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalRFModel.lifetime, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalRFModel.lifetime, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalRFModel.lifetime$tuneValue
+```
+
+### Multivariate Adaptive Regression Splines
+
+```{r Lifetime Multivariate Adaptive Regression Splines (MARS), warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.lifetime~., data = train, method = 'both', N = 6000)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.lifetime~., data = train, method = 'earth', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.lifetime~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.lifetime~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "response")
+  test.pred <- predict(train.fit, xtest, type = "response")
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.lifetime, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.lifetime, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalMARSModel.lifetime <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalMARSModel.lifetime, xtest, type = "response")
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalMARSModel.lifetime, num_features = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalMARSModel.lifetime$tuneValue
+```
+
+### RBF Support Vector Machine
+```{r Lifetime Support Vector Machine RBF, warning=FALSE, results = 'hide'}
+#Prepare sets
+train <- na.roughfix(data[sampIndex == 1,])
+test <- na.roughfix(data[sampIndex == 2,])
+
+#Set Train
+set.seed(123)
+train <- ovun.sample(depression.lifetime~., data = train, method = 'both', N = 5500)$data
+
+#Tune hyperparameters
+ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, classProbs = T, verboseIter = T)
+set.seed(123)
+train.fit <- train(depression.lifetime~., data = train, method = 'svmRadial', metric = 'AUC', trControl = ctrl)$finalModel
+
+#Prepare matrices
+xtrain <- as.data.frame(model.matrix(depression.lifetime~., data = train)[,-1])
+xtest <- as.data.frame(model.matrix(depression.lifetime~., data = test)[,-1])
+
+#Threshold Plot
+{
+  train.pred <- predict(train.fit, xtrain, type = "prob")[,2]
+  test.pred <- predict(train.fit, xtest, type = "prob")[,2]
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- i / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.lifetime, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.lifetime, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+}
+
+train_finalSVMModel.lifetime <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalSVMModel.lifetime, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Hyperparameters
+
+```{r}
+attributes <- attributes(train_finalSVMModel.lifetime)
+attributes$param
+attributes$kernelf
+```
+
+### Gradient Boosted Trees
+
+```{r Lifetime xgBoost, results = 'hide'}
+set.seed(123)
+train <- data[sampIndex == 1,]
+train$depression.lifetime <- as.numeric(train$depression.lifetime) - 1 #N is 0, Y is 1
+set.seed(123)
+train <- ovun.sample(depression.lifetime~., data = train, method = 'both', N = 10500, na.action = 'na.roughfix')$data
+train_matrix <- as.matrix(sparse.model.matrix(depression.lifetime~., -1, data = train)) %>%
+  xgb.DMatrix(label = train[,'depression.lifetime'])
+
+test <- na.roughfix(data[sampIndex == 2,])
+test$depression.lifetime <- as.numeric(test$depression.lifetime) - 1 #N is 0, Y is 1
+test_matrix <- as.matrix(sparse.model.matrix(depression.lifetime~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.lifetime'])
+
+# train$depression.lifetime <- as.factor(ifelse(train$depression.lifetime == 1, 'Y', 'N'))
+# ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+# train.fit <- train(depression.lifetime~., data = train,
+#                    method = 'xgbTree',
+#                    objective = 'binary:logistic',
+#                    metric = 'AUC',
+#                    trControl = ctrl)
+#
+xgb_params <- list(objective = 'binary:logistic', eval_metric = 'aucpr')
+watchlist <- list(train = train_matrix, test = test_matrix)
+
+set.seed(123)
+train.fit <- xgb.train(params = xgb_params, data = train_matrix,
+                       eta = 0.4,
+                       max_depth = 3,
+                       gamma = 0,
+                       colsample_bytree = 0.8,
+                       min_child_weight = 1,
+                       subsample = 0.75,
+                       early_stopping_rounds = 100,
+                       nrounds = 500,
+                       validate_parameters = T, watchlist = watchlist)
+
+eplot <- data.frame(train.fit$evaluation_log)
+plot_ly(eplot,
+          x = ~iter, y = ~train_aucpr, name = 'Train AUCPR', type = 'scatter', mode = 'lines', line = list(color = 'blue')) %>%
+    add_trace(x = ~iter, y = ~test_aucpr, name = 'Test AUCPR', line = list(color = 'red'))
+
+# Threshold Plot
+{
+  train$depression.lifetime <- as.factor(ifelse(train$depression.lifetime == 1, 'Y', 'N'))
+  test$depression.lifetime <- as.factor(ifelse(test$depression.lifetime == 1, 'Y', 'N'))
+  train.pred <- predict(train.fit, train_matrix)
+  test.pred <- predict(train.fit, test_matrix)
+
+  thresholdStats <- as.data.frame(matrix(0, nrow = 99, ncol = 7))
+  for(i in 1:99)
+  {
+    threshold <- (i) / 100
+    thresholdStats[i,1] <- threshold
+
+    train.threshPred <- as.factor(ifelse(train.pred > threshold, 'Y', 'N'))
+    test.threshPred <- as.factor(ifelse(test.pred > threshold, 'Y', 'N'))
+
+    trainConfusion <- confusionMatrix(train.threshPred, train$depression.lifetime, positive = 'Y')
+    testConfusion <- confusionMatrix(test.threshPred, test$depression.lifetime, positive = 'Y')
+
+    thresholdStats[i,2] <- getFMeasure(trainConfusion)
+    thresholdStats[i,3] <- trainConfusion$byClass[1]
+    thresholdStats[i,4] <- trainConfusion$byClass[3]
+    thresholdStats[i,5] <- getFMeasure(testConfusion)
+    thresholdStats[i,6] <- testConfusion$byClass[1]
+    thresholdStats[i,7] <- testConfusion$byClass[3]
+  }
+
+  plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+}
+
+train_finalXGBoost.lifetime <- train.fit #Save for final
+```
+
+#### Precision-Recall Curve on Test Data-set
+
+```{r}
+test.pred <- predict(train_finalXGBoost.lifetime, test_matrix)
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+#### Training and Test Set F1, Precision, and Recalls vs. Threshold
+
+```{r}
+plot_ly(thresholdStats, x = ~V1, y = ~V2, name = 'Train F-Measure', type = 'scatter', mode = 'lines', line = list(color = 'black')) %>%
+    add_trace(x = ~V1, y = ~V3, name = 'Train Recall', line = list(color = 'green')) %>%
+    add_trace(x = ~V1, y = ~V4, name = 'Train Precision', line = list(color = 'blue')) %>%
+    add_trace(x = ~V1, y = ~V5, name = 'Test F-Measure', line = list(color = 'black', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V6, name = 'Test Recall', line = list(color = 'green', dash = 'dot')) %>%
+    add_trace(x = ~V1, y = ~V7, name = 'Test Precision', line = list(color = 'blue', dash = 'dot'))
+```
+
+#### Variable Importance Plot
+
+Due to large amount of features (>50, only the top 20 features are plotted)
+
+```{r}
+vip(train_finalXGBoost.lifetime, n = 20)
+```
+
+#### Hyperparameters
+
+```{r}
+train_finalXGBoost.lifetime$params
+```
+
+## Model Comparisons {.tabset}
+
+```{r Lifetime Model Comparisons}
+test <- na.roughfix(data[sampIndex == 2,])
+xtest <- as.data.frame(model.matrix(depression.lifetime~., data = test)[,-1])
+val <- na.roughfix(data[sampIndex == 3,])
+xval <- as.data.frame(model.matrix(depression.lifetime~., data = val)[,-1])
+```
+
+Each model's AUPRC graphs are shown for their performance on test and validation sets. The upper graph shows test set performance, while the lower graph shows validation set performance.
+
+Our best model was Gradient Boosted Trees, with test set performance of AUC = 0.266 and validation set performance of AUC = 0.167. For reference, our baseline model performed at AUC = 0.0652
+
+### Decision Tree
+
+```{r}
+test.pred <- predict(train_finalTreeModel.lifetime, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalTreeModel.lifetime, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.lifetime == "Y"]
+bg.val <- val.pred[val$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### Random Forest
+
+```{r}
+test.pred <- predict(train_finalRFModel.lifetime, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalRFModel.lifetime, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.lifetime == "Y"]
+bg.val <- val.pred[val$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### M.A.R.S.
+
+```{r}
+test.pred <- predict(train_finalMARSModel.lifetime, xtest, type = "response")
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalMARSModel.lifetime, xval, type = "response")
+fg.val <- val.pred[val$depression.lifetime == "Y"]
+bg.val <- val.pred[val$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### RBF Support Vector Machine
+
+```{r}
+test.pred <- predict(train_finalSVMModel.lifetime, xtest, type = "prob")[,2]
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalSVMModel.lifetime, xval, type = "prob")[,2]
+fg.val <- val.pred[val$depression.lifetime == "Y"]
+bg.val <- val.pred[val$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+### Gradient Boosted Trees
+
+```{r}
+test_matrix <- as.matrix(sparse.model.matrix(depression.lifetime~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.lifetime'])
+val_matrix <- as.matrix(sparse.model.matrix(depression.lifetime~., -1, data = val)) %>%
+  xgb.DMatrix(label = val[,'depression.lifetime'])
+
+test.pred <- predict(train_finalXGBoost.lifetime, test_matrix, type = "prob")
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+val.pred <- predict(train_finalXGBoost.lifetime, val_matrix, type = "prob")
+fg.val <- val.pred[val$depression.lifetime == "Y"]
+bg.val <- val.pred[val$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+
+# importance <- xgb.importance(train_finalXGBoost.lifetime$feature_names, model = train_finalXGBoost.lifetime)
+# xgb.plot.importance(importance[c(1:15),])
+# xgb.plot.importance(importance[c(16:30),])
+```
+
+## Best Model Variable Selection
+
+Our best model predicting lifetime presence of MDD was Gradient Boosted Trees once again. We repeat the same process as we have done for depression.30day and depression.12Month.
+
+Our final retrained Gradient Boosted Tree reduces features used from 114 to 21
+
+ * householdIncome
+ * age
+ * freqArgueWithRelatives
+ * highschool.numAttended
+ * height.inches
+ * gradeSchool.relativeAge
+ * freqFriendInteraction
+ * yearsOfEducation.respondent
+ * gamble.ageFirstExposure
+ * freqTalkWithRelatives
+ * gamble.ageFirstExposure
+ * personality.sociallyAwkward
+ * sex
+ * workHrs.week
+ * employment.initialAge
+ * motherDeath.respondentAge
+ * fatherDeath.respondentAge
+ * race
+ * maritalStatus
+ * relativeWellOffRank.local
+ * financialNeedsMet
+
+Test and Validation set performances are AUPRC = 0.206 and AUPRC = 0.162 respectively
+
+Using 24 features, we achieve ~150% better performance than our baseline (AUPRC = 0.0652).
+
+Below are some statistics for this final model.
+
+```{r Lifetime XGBoost Retrain, results = 'hide'}
+train <- na.roughfix(data[sampIndex == 1,]) %>% dplyr :: select(c("depression.lifetime", "householdIncome", "age", "freqArgueWithRelatives", "highschool.numAttended", "height.inches", "gradeSchool.relativeAge", "freqFriendInteraction", "yearsOfEducation.respondent", "gamble.ageFirstExposure", "personality.sociallyAwkward", "sex", "workHrs.week", "employment.initialAge", "relativeWellOffRank.usPop", "motherDeath.respondentAge", "fatherDeath.respondentAge", "race", "maritalStatus", "relativeWellOffRank.local", "financialNeedsMet"))
+train$depression.lifetime <- as.numeric(train$depression.lifetime) - 1 #N is 0, Y is 1
+set.seed(123)
+train <- ovun.sample(depression.lifetime~., data = train, method = 'both', N = 3500)$data
+train_matrix <- as.matrix(sparse.model.matrix(depression.lifetime~., -1, data = train)) %>%
+  xgb.DMatrix(label = train[,'depression.lifetime'])
+
+test <- na.roughfix(data[sampIndex == 2,]) %>% dplyr :: select(c("depression.lifetime", "householdIncome", "age", "freqArgueWithRelatives", "highschool.numAttended", "height.inches", "gradeSchool.relativeAge", "freqFriendInteraction", "yearsOfEducation.respondent", "gamble.ageFirstExposure", "personality.sociallyAwkward", "sex", "workHrs.week", "employment.initialAge", "relativeWellOffRank.usPop", "motherDeath.respondentAge", "fatherDeath.respondentAge", "race", "maritalStatus", "relativeWellOffRank.local", "financialNeedsMet"))
+test$depression.lifetime <- as.numeric(test$depression.lifetime) - 1 #N is 0, Y is 1
+test_matrix <- as.matrix(sparse.model.matrix(depression.lifetime~., -1, data = test)) %>%
+  xgb.DMatrix(label = test[,'depression.lifetime'])
+
+val <- na.roughfix(data[sampIndex == 3,]) %>% dplyr :: select(c("depression.lifetime", "householdIncome", "age", "freqArgueWithRelatives", "highschool.numAttended", "height.inches", "gradeSchool.relativeAge", "freqFriendInteraction", "yearsOfEducation.respondent", "gamble.ageFirstExposure", "personality.sociallyAwkward", "sex", "workHrs.week", "employment.initialAge", "relativeWellOffRank.usPop", "motherDeath.respondentAge", "fatherDeath.respondentAge", "race", "maritalStatus", "relativeWellOffRank.local", "financialNeedsMet"))
+val$depression.lifetime <- as.numeric(val$depression.lifetime) - 1 #N is 0, Y is 1
+val_matrix <- as.matrix(sparse.model.matrix(depression.lifetime~., -1, data = val)) %>%
+  xgb.DMatrix(label = val[,'depression.lifetime'])
+
+# train$depression.lifetime <- as.factor(ifelse(train$depression.lifetime == 1, 'Y', 'N'))
+# ctrl <- trainControl(method='cv', number=5, summaryFunction = prSummary, verboseIter = T, classProbs = T)
+# train.fit <- train(depression.lifetime~., data = train,
+#                    method = 'xgbTree',
+#                    objective = 'binary:logistic',
+#                    metric = 'AUC',
+#                    trControl = ctrl)
+
+xgb_params <- list(objective = 'binary:logistic', eval_metric = 'aucpr')
+watchlist <- list(train = train_matrix, test = val_matrix)
+
+set.seed(123)
+train.fit <- xgb.train(params = xgb_params, data = train_matrix,
+                       eta = 0.4,
+                       max_depth = 3,
+                       gamma = 0,
+                       colsample_bytree = 0.6,
+                       min_child_weight = 1,
+                       subsample = 1,
+                       early_stopping_rounds = 100,
+                       nrounds = 500,
+                       validate_parameters = T, watchlist = watchlist)
+
+XGBoost_featureSelected.lifetime <- train.fit #Save for final
+```
+
+### Variable Importance Plot
+
+```{r}
+vip(XGBoost_featureSelected.lifetime, n = 24)
+```
+
+### Test Set PRC-curve
+
+```{r}
+test$depression.lifetime <- as.factor(ifelse(test$depression.lifetime == 1, 'Y', 'N'))
+test.pred <- predict(XGBoost_featureSelected.lifetime, test_matrix, type = "prob")
+fg.test <- test.pred[test$depression.lifetime == "Y"]
+bg.test <- test.pred[test$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.test, scores.class1 = bg.test, curve = T))
+```
+
+### Validation Set PRC-curve
+
+```{r}
+val$depression.lifetime <- as.factor(ifelse(val$depression.lifetime == 1, 'Y', 'N'))
+val.pred <- predict(XGBoost_featureSelected.lifetime, val_matrix, type = "prob")
+fg.val <- val.pred[val$depression.lifetime == "Y"]
+bg.val <- val.pred[val$depression.lifetime == "N"]
+plot(pr.curve(scores.class0 = fg.val, scores.class1 = bg.val, curve = T))
+```
+
+# Results
+
+Predicting presence of MDD within the past month, our model achieved an AUPRC of 0.103 on the test set and 0.104 on the validation set. This is an improvement of 333% from the baseline AUPRC of 0.024.
+
+The following features were used:
+
+ * householdIncome
+ * socialLifeDifficulty.30day
+ * healthWorkAbsence.30day
+ * age
+ * height.inches
+ * workHrs.week
+ * relativeWellOffRank.usPop
+ * gamble.ageFirstExposure
+ * freqFriendInteraction
+ * yearsOfEducation.respondent
+
+Predicting presence of MDD within the past year, our model achieved an AUPRC of 0.206 on the test set and 0.162 on the validation set. This is an improvement of at least 149% from the baseline AUPRC of 0.065
+
+The following features were used:
+
+ * age
+ * householdIncome
+ * freqArgueWithRelatives
+ * personality.sociallyAwkward
+ * personality.dislikeAlone
+ * relativeWellOffRank.local
+ * freqFriendInteraction
+ * sex
+ * height.inches
+ * freqTalkWithRelatives
+ * gamble.ageFirstExposure
+ * employment.initialAge
+ * maritalStatus
+ * employment.current
+ * wksUnemployed.12month
+ * yearsOfEducation.respondent
+ * finances.numberPplSupportingHousehold
+ * gamble.totalCount
+ * personality.preferSoloActivities
+ * personality.indecisiveAbtSelfPath
+ * fatherDeath.respondentAge
+ * nameCalled.freq
+ * race
+ * workHrs.week
+
+Predicting presence of MDD within the past year, our model achieved an AUPRC of 0.306 on the test set and 0.284 on the validation set. This is an improvement of at least 98.6% from the baseline AUPRC of 0.143
+
+The following features were used:
+
+ * householdIncome
+ * age
+ * freqArgueWithRelatives
+ * highschool.numAttended
+ * height.inches
+ * gradeSchool.relativeAge
+ * freqFriendInteraction
+ * yearsOfEducation.respondent
+ * gamble.ageFirstExposure
+ * freqTalkWithRelatives
+ * gamble.ageFirstExposure
+ * personality.sociallyAwkward
+ * sex
+ * workHrs.week
+ * employment.initialAge
+ * motherDeath.respondentAge
+ * fatherDeath.respondentAge
+ * race
+ * maritalStatus
+ * relativeWellOffRank.local
+ * financialNeedsMet
+
+# Conclusion
+None of the final models were had a large enough AUPRC to act on its own as a classification model. Relationships do exist, but are not strong enough to form a stand-alone model. However, they were successful in identifying important variables related to classifying positive cases of Major Depressive Disorder. Failing to create an accurate stand-alone model, this is our paper's main purpose. Variables identified as important should be considered as areas of interest in future MDD research.
+
+In the short term (Past Month), variables related to gambling habits, socioeconomic status, work/social life, education, and age were important in modeling MDD. Surprisingly, height was also significant.
+
+Predicting 12 Month presence of MDD, in addition to the variables significant for short term MDD presence, race, marriage, and personality variables were significant. Shy/insecure personalities tended to have higher depression rates. Height remains an important variable.
+
+Lifetime risk has all previously mentioned features be significant, with the addition of number of high schools attended during childhood and the age at which they were when their parents died. Early deaths of parental figures were correlated with higher rates of lifetime presence of MDD. Attendance of more high schools was also found to increase depression rate. We hypothesize this is because number of high schools attended is a good indicator of childhood stability, where attending more would suggest childhood instability. Once more, height was significant.
+
+# Limitations and Future Research
+We hope this paper can serve as a guide, so future researchers know where to look for relationships when studying MDD. Some suggestions include but are not limited to: further exploration of the unexpectedly important variable "height", and, research into actionable identified variables that could have policy implications (ie. gambling). To elaborate, this paper only identifies that greater gambling frequency is correlated with increased risks of depression, but cannot distinguish between if it is the act of gambling itself, or the greater potential for lost money that occurs with greater frequencies of gambling, of which can lead to depression. Knowing such details would serve great purpose in informing policymakers.
+
+This paper is limited by the relatively outdated dataset. CPES 2001-2003 was the most recent publicly available dataset with a nationally representative sample that served the purposes of modeling Major Depressive Disorder. More recent sets are not yet released to the public.
+
+Additionally, depression.lifetime was time dependent. Naturally, older people had a higher probability of suffering from MDD at least once, as they had more years to potentially develop MDD. Ideally, depression.lifetime data would have been gathered from all older subjects. However, eliminating all young subjects would have made the data set too small to sufficiently train models.
+
+Finally, the raw dataset contained over 5,000 variables relating to all mental illnesses. As this study focused on depression, suspect variables had to  manually selected to be included in the cleaned dataset to be used for predictive models. This leaves the possibility that some important variables that potentially could have modeled MDD were left out of this study. Though, this most likely is not the case, as preliminary predictive models were run on the entire raw dataset of over 5,000 variables, which assisted in identifying variables to be included.
+
+# References
+Alegria, M., Jackson, J. S. (J. S., Kessler, R. C., &amp; Takeuchi, D. (2016, March 23). Collaborative psychiatric EPIDEMIOLOGY Surveys (CPES), 2001-2003 [UNITED STATES]. Collaborative Psychiatric Epidemiology Surveys (CPES), 2001-2003 [United States]. https://www.icpsr.umich.edu/web/ICPSR/studies/20240/summary. 
+
+American Psychiatric Association. (2013, May 18). Diagnostic And Statistical Manual Of Mental Disorders, Fifth Edition. Psychiatry online. https://doi.org/10.1176/appi.books.9780890425596. 
+
+American Psychiatric Association. (2020). Quantifying the Cost of Depression. Workplace Mental Health. https://www.workplacementalhealth.org/mental-health-topics/depression/quantifying-the-cost-of-depression. 
+
+Center for Behavioral Health Statistics and Quality. (2016). Key substance use and mental health indicators in the United States: Results from the 2015 National Survey on Drug Use and Health (HHS Publication No. SMA 16-4984, NSDUH Series H-51). Retrieved from https://www.samhsa.gov/data/
+
+Center for Suicide Prevention. (2017, April 4). Depression and suicide prevention. Centre for Suicide Prevention. https://www.suicideinfo.ca/resource/depression-suicide-prevention/. 
+
+Davis, J., &amp; Goadrich, M. (2006). The Relationship Between Precision-Recall and ROC Curves. 2006. 
+
+Erickson, M. (2020, April 16). Stanford researchers devise treatment that relieved depression in 90% of participants in small study. News Center. https://med.stanford.edu/news/all-news/2020/04/stanford-researchers-devise-treatment-that-relieved-depression-i.html#:
+
+Pietrangelo, A. (2019, October 22). The effects of depression in your body. Healthline. https://www.healthline.com/health/depression/effects-on-body#Central-nervous-system. 
+
+Weihs, K., & Wert, J. M. (2011). A primary care focus on the treatment of patients with major depressive disorder. The American journal of the medical sciences, 342(4), 324–330. https://doi.org/10.1097/MAJ.0b013e318210ff56
+
+White Wreath Association. (2016, May 7). Suicide myths and stigmas. White Wreath - Action Against Suicide - Mental Health Advocacy. https://www.whitewreath.org.au/articles/myths-a-stygmas/. 
+
+World Health Organization. (2013). Depression. https://www.who.int/news-room/fact-sheets/detail/depression. 
+
+&nbsp;
+<hr />
+<p style="text-align: center;">Alexander Chen</p>
+<p style="text-align: center;">With A Very Special Thanks To Prof. Linda Zhao</p>
+<p style="text-align: center;"><span style="color: #808080;"><em>alchen22@mlschools.org</em></span></p>
+&nbsp;

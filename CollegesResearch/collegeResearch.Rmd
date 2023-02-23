@@ -1,0 +1,243 @@
+---
+title: "College Analysis"
+author: "Alexander Chen"
+date: "2/22/2023"
+output: 
+  rmdformats::readthedown:
+    number_sections: T
+    code_folding: "hide"
+    fig_width: 12
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include = F}
+#Knit default settings
+knitr::opts_chunk$set(echo = T, fig.width=8, fig.height=4, warning = F)
+
+#Options
+options(scipen = 0, digits = 3, max.print = 500)
+
+#Load required packages
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(devtools, tidyverse, data.table, lubridate, dplyr, rpart, rpart.plot, ggplot2, haven, magrittr, skimr, GGally, rmdformats, prettydoc, dplyr, DT, e1071, fmtr, Hmisc, readxl, lattice, readstata13)
+```
+
+## 1. For every survey, provide a succinct but comprehensive description of the nature of the data included.  Among the pieces of information I need:
+## 1a. What is the source of the information
+## 1b. Is the information available for all colleges? If not, which ones are excluded? Why?
+## 1c. Is there any reason that makes you believe the variable definition is not consistent across colleges? Why?
+## 2. For every survey, provide me with the dataset in stata format, complete with the variables' description included in the DICT file
+## 3. Merge all surveys in one dataset, where each raw refers to one college
+
+```{r read data}
+directory.raw <- as.data.frame(read.csv("data/directory/hd2021.csv"))
+directory.dict <- read_excel("data/directory/hd2021.xlsx", sheet = 3)
+
+
+# Adding notes to directory.raw
+directory.notes <- directory.dict$longDescription
+directory.raw <- addNotes(directory.raw, directory.notes)
+attributes(directory.raw)
+save.dta13(directory.raw, "directory_raw.dta")
+
+
+
+
+
+
+library(readstata13)
+directory.dta <- read.dta13("directory_rawnotesExport.dta")
+attributes(directory.dta)
+
+# testing adding a note to var.
+# Always three rows. Row 1 lists variable name, 
+# row two lists content (if initialization column, is integer), row three lists note number
+
+# TASKTWO: WRITE FUNCITON THAT TAKES A DATAFRAME AND LIST
+# MATCHING APPLIES NOTE TO EVERY COLUMN IN DATAFRAME
+
+# notes.dt <- data.frame(nrow = 3)[,-1]
+# for(i in 1:ncol(directory.raw)){
+#   varname <- names(directory.raw)[i]
+#   merger <- data.frame(c(toString(varname), "note0", 1))
+#   notes.dt <- cbind(notes.dt, merger)
+#   merger <- data.frame(c(toString(varname), "note1", "this is the best note"))
+#   notes.dt <- cbind(notes.dt, merger)
+# }
+# view(notes.dt)
+# notes.list <- as.list.data.frame(notes.dt)
+# attr(directory.dta, "expansion.fields") <- notes.list
+# attributes(directory.dta)
+
+
+
+
+
+
+directory.dta <- addNotes(directory.dta, noteDummy)
+view(attr(directory.dta, "expansion.fields"))
+
+
+
+
+
+
+
+
+
+
+
+# attr(directory.raw, "label") <- as.list(directory.dict$longDescription)
+
+for (i in 1:ncol(directory.raw)){
+  attr(directory.raw[,i], "expansion.fields") <- "test if label works"
+}
+
+attributes(directory.raw$UNITID)
+
+
+match(c(1, 2, 3, 4, 5), c(6, 7, 8, 2, 10))
+
+
+comment(directory.raw$UNITID) <- "uniiiiiID"
+
+
+sampleVar <- 10
+attr(sampleVar, "new attribute") <- "testing new attribute"
+attributes(sampleVar)
+
+comment(names(directory.raw)[1]) <- "comment on UNITID name"
+comment(directory.raw$UNITID)
+
+
+comment(directory.raw) <- "directoryComment"
+library(lattice)
+comment
+comment(directory.raw$UNITID)
+
+
+# TASKONE: ASSIGNING LABELS TO EACH VARIABLE
+label(directory.raw) <- as.list(directory.dict$longDescription)
+write_dta(directory.raw, "directory_raw.dta")
+
+
+
+# check for missingness
+view(apply(directory_dt, c(1, 2), isMissing, missingnessList = c("", " ")))
+
+# Documentation
+# IC2021 Educational offerings, organization, services and athletic associations	
+# IC2021_AY	Student charges for academic year programs	
+# IC2021_PY	Student charges by program (vocational programs)	
+# FLAGS2021	Response status for all survey components	(regarding nature of responses. Such as imputation, special data reported in aggregate from multiple campuses, etc.)
+# 
+# EFFY2021 12-month unduplicated headcount by race/ethnicity, gender and level of student: 2020-21	
+# EFFY2021_DIST	12-month unduplicated headcount by distance education status and student level: 2020-21	
+# EFIA2021 12-month instructional activity: 2020-21	
+# FLAGS2021	Response status for all survey components	
+# 
+# ADM2021	Admission considerations, applications, admissions, enrollees and test scores, fall 2021	
+# FLAGS2021	Response status for all survey components	
+# 
+# EF2021A	Race/ethnicity, gender, attendance status, and level of student: Fall 2021	
+# EF2021B	Age category, gender, attendance status, and level of student: Fall 2021	
+# EF2021C	Residence and migration of first-time freshman: Fall 2021	
+# EF2021D	Total entering class, retention rates, and student-to-faculty ratio: Fall 2021	
+# EF2021A_DIST	Distance education status and level of student: Fall 2021	
+# FLAGS2021	Response status for all survey components	
+# 
+# C2021_A	Awards/degrees conferred by program (6-digit CIP code), award level, race/ethnicity, and gender: July 1, 2020 to June 30, 2021	
+# C2021_B	Number of students receiving awards/degrees, by race/ethnicity and gender: July 1, 2020 to June 30, 2021	
+# C2021_C	Number of students receiving awards/degrees, by award level and by gender, race/ethnicity and age categories: July 1, 2020 to June 30, 2021	
+# C2021DEP	Number of programs offered and number of programs offered via distance education, by award level: July 1, 2020 to June 30, 2021	
+# FLAGS2021	Response status for all survey components	
+# 
+# SAL2021_IS	Number and salary outlays for full-time nonmedical instructional staff, by gender, and academic rank: Academic year 2021-22	
+# SAL2021_NIS	Number and salary outlays for full-time nonmedical noninstructional staff, by gender, and academic rank: Academic year 2021-22	
+# FLAGS2021	Response status for all survey components	
+# 
+# S2021_OC	Full- and part-time staff by occupational category, race/ethnicity, and gender: Fall 2021	
+# S2021_SIS	Full-time instructional staff, by faculty and tenure status, and academic rank (Degree-granting institutions): Fall 2021	
+# S2021_IS	Full-time instructional staff, by faculty and tenure status, academic rank, race/ethnicity, and gender (Degree-granting institutions): Fall 2021	
+# S2021_NH	New hires by occupational category, race/ethnicity, and gender (Degree-granting institutions): Fall 2021	
+# FLAGS2021	Response status for all survey components	
+# 
+# EAP2021	Number of staff by occupational category, faculty and tenure status: Fall 2021	
+# FLAGS2021	Response status for all survey components	
+# 
+# F2021_F1A	Public institutions - GASB 34/35: Fiscal year 2021	
+# F2021_F2	Private not-for-profit institutions or Public institutions using FASB: Fiscal year 2021	
+# F2021_F3	Private for-profit institutions: Fiscal year 2021	
+# FLAGS2021	Response status for all survey components	
+# 
+# SFA2021	Student financial aid and net price: 2020-21	
+# SFAV2021	Military Servicemembers and Veteran's Benefits: 2020-21	
+# FLAGS2021	Response status for all survey components	
+# 
+# GR2021	Graduation rate data, 150% of normal time to complete - cohort year 2015 (4-year) and cohort year 2018 (2-year) institutions	
+# GR2021_L2	Graduation rate data, 150% of normal time to complete - cohort year 2018 (less-than-2-year institutions)	
+# GR2021_PELL_SSL	Graduation rate data for Pell Grant and Subsidized Stafford Loan recipients, 150% of normal time to complete - cohort year 2015 (4-year) and cohort year 2018 (less-than-4-year) institutions	
+# GR200_21	Graduation rate data, 200% of normal time to complete - cohort year 2013 (4-year) and cohort year 2017 (less-than-4-year) institutions	
+# FLAGS2021	Response status for all survey components	
+# 
+# OM2021	Award and enrollment data at four, six and eight years of entering degree/certificate-seeking undergraduate cohorts from 2013-14 at degree-granting institutions, by Pell status	
+# FLAGS2021	Response status for all survey components	
+# 
+# AL2021	Academic Libraries: Fiscal year 2021	
+# FLAGS2021	Response status for all survey components	
+
+gradRate_flags_dt <- as.data.frame(read.csv("data/gradRates/flags2021.csv"))
+
+summary(gradRate_flags_dt)
+
+label(data) = lapply(names(data), function(x) var.labels[match(x, names(var.labels))])
+
+# Import list of all US Colleges
+```
+
+```{r functions}
+# Prerequisites
+# The length of datatable and noteslist must be the same.
+# In addition, datatable must contain STATA exportable attributes
+# created with readstata13.
+addNotes <- function(datatable, notesList){
+  if(ncol(datatable) != length(notesList)){
+    print("notes failed")
+    return(NULL)
+  }
+  else{
+    notes.dt <- data.frame(nrow = 3)[,-1]
+    for(i in 1:ncol(datatable)){
+      varname <- names(datatable)[i]
+      varnote <- notesList[i]
+      merger <- data.frame(c(toString(varname), "note0", 1))
+      notes.dt <- cbind(notes.dt, merger)
+      merger <- data.frame(c(toString(varname), "note1", varnote))
+      notes.dt <- cbind(notes.dt, merger)
+    }
+    notes.list <- as.list.data.frame(notes.dt)
+    attr(datatable, "expansion.fields") <- notes.list
+  }
+  return (datatable)
+}
+
+isMissing <- function(data, missingnessList){
+  if(data %in% as.list(missingnessList)){
+    return (TRUE)
+  }
+  return (FALSE)
+}
+```
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
